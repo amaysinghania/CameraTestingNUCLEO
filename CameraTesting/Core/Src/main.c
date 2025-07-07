@@ -133,7 +133,7 @@ int main(void)
 
     /* USER CODE END WHILE */
 	ret = OV5640_RegisterBusIO(&cam, &io);
-	HAL_UART_Transmit(&huart1,ret,sizeof(ret),10);// Sending in normal mode
+	HAL_UART_Transmit(&huart1,ret,sizeof(ret),10);
 	HAL_Delay(1000);
 
     /* USER CODE BEGIN 3 */
