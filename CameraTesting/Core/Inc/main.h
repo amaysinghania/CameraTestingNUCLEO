@@ -34,7 +34,6 @@ extern "C" {
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <ov5640.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -60,6 +59,10 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define Shutdown_Pin GPIO_PIN_0
+#define Shutdown_GPIO_Port GPIOF
+#define Reset_Pin GPIO_PIN_1
+#define Reset_GPIO_Port GPIOF
 #define LD2_Pin GPIO_PIN_1
 #define LD2_GPIO_Port GPIOE
 
