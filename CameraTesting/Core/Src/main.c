@@ -141,66 +141,66 @@ int main(void)
     Error_Handler();
   }
 
-  printf("OV5640 Camera Test Starting...\r\n");
-
-  // Power up and reset the camera
-  printf("Powering up camera...\r\n");
-  Camera_PowerUp();
-  HAL_Delay(10);  // Allow power to stabilize
-
-  printf("Resetting camera...\r\n");
-  Camera_Reset();
-  HAL_Delay(50);  // Allow reset to complete
-
-  // Register camera I/O bus
-  printf("Registering camera I/O...\r\n");
-  ret = OV5640_RegisterBusIO(&cam, &io);
-  if (ret == OV5640_OK) {
-    printf("Camera I/O registration: SUCCESS\r\n");
-    BSP_LED_On(LED_GREEN);
-  } else {
-    printf("Camera I/O registration: FAILED (ret=%ld)\r\n", ret);
-    BSP_LED_On(LED_RED);
-    while(1); // Stop here if I/O registration fails
-  }
-
-  // Try to read camera ID
-  printf("Reading camera ID...\r\n");
-  ret = OV5640_ReadID(&cam, &camera_id);
-  if (ret == OV5640_OK) {
-    printf("Camera ID read: SUCCESS (ID=0x%04lX)\r\n", camera_id);
-    if (camera_id == 0x5640) {
-      printf("OV5640 camera detected!\r\n");
-      BSP_LED_On(LED_BLUE);
-    } else {
-      printf("WARNING: Unexpected camera ID (expected 0x5640)\r\n");
-    }
-  } else {
-    printf("Camera ID read: FAILED (ret=%ld)\r\n", ret);
-    printf("Check I2C connections and camera power\r\n");
-  }
-
-  // Initialize camera with VGA resolution and RGB565 format
-  printf("Initializing camera with VGA resolution...\r\n");
-  ret = OV5640_Init(&cam, OV5640_R640x480, OV5640_RGB565);
-  if (ret == OV5640_OK) {
-    printf("Camera initialization: SUCCESS\r\n");
-    printf("Camera is ready for image capture!\r\n");
-  } else {
-    printf("Camera initialization: FAILED (ret=%ld)\r\n", ret);
-  }
-
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+  printf("OV5640 Camera Test Starting...\r\n");
+
+    // Power up and reset the camera
+    printf("Powering up camera...\r\n");
+    Camera_PowerUp();
+    HAL_Delay(10);  // Allow power to stabilize
+
+    printf("Resetting camera...\r\n");
+    Camera_Reset();
+    HAL_Delay(50);  // Allow reset to complete
+
+    // Register camera I/O bus
+    printf("Registering camera I/O...\r\n");
+    ret = OV5640_RegisterBusIO(&cam, &io);
+    if (ret == OV5640_OK) {
+      printf("Camera I/O registration: SUCCESS\r\n");
+      BSP_LED_On(LED_GREEN);
+    } else {
+      printf("Camera I/O registration: FAILED (ret=%ld)\r\n", ret);
+      BSP_LED_On(LED_RED);
+      while(1); // Stop here if I/O registration fails
+    }
+
+    // Try to read camera ID
+    printf("Reading camera ID...\r\n");
+    ret = OV5640_ReadID(&cam, &camera_id);
+    if (ret == OV5640_OK) {
+      printf("Camera ID read: SUCCESS (ID=0x%04lX)\r\n", camera_id);
+      if (camera_id == 0x5640) {
+        printf("OV5640 camera detected!\r\n");
+        BSP_LED_On(LED_BLUE);
+      } else {
+        printf("WARNING: Unexpected camera ID (expected 0x5640)\r\n");
+      }
+    } else {
+      printf("Camera ID read: FAILED (ret=%ld)\r\n", ret);
+      printf("Check I2C connections and camera power\r\n");
+    }
+
+    // Initialize camera with VGA resolution and RGB565 format
+    printf("Initializing camera with VGA resolution...\r\n");
+    ret = OV5640_Init(&cam, OV5640_R640x480, OV5640_RGB565);
+    if (ret == OV5640_OK) {
+      printf("Camera initialization: SUCCESS\r\n");
+      printf("Camera is ready for image capture!\r\n");
+    } else {
+      printf("Camera initialization: FAILED (ret=%ld)\r\n", ret);
+    }
 
   while (1)
   {
 
     /* USER CODE END WHILE */
-    // Main loop - camera is now initialized and ready for capture
-    HAL_Delay(1000);
 
     /* USER CODE BEGIN 3 */
+	// Main loop - camera is now initialized and ready for capture
+	HAL_Delay(1000);
   }
   /* USER CODE END 3 */
 }
@@ -264,9 +264,6 @@ void SystemClock_Config(void)
     Error_Handler();
   }
   HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_HSI48, RCC_MCODIV_2);
-
-  // Small delay to allow camera clock to stabilize
-  HAL_Delay(100);
 }
 
 /**
@@ -417,6 +414,7 @@ static void MX_GPIO_Init(void)
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
@@ -424,11 +422,17 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOG_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOF, Shutdown_Pin|Reset_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin Output Level for Camera Control */
-  HAL_GPIO_WritePin(CAM_RESET_PORT, CAM_RESET_PIN, GPIO_PIN_SET);    // Reset inactive (high)
-  HAL_GPIO_WritePin(CAM_PWDN_PORT, CAM_PWDN_PIN, GPIO_PIN_RESET);    // Power up (low)
+  /*Configure GPIO pins : Shutdown_Pin Reset_Pin */
+  GPIO_InitStruct.Pin = Shutdown_Pin|Reset_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA8 */
   GPIO_InitStruct.Pin = GPIO_PIN_8;
@@ -579,9 +583,9 @@ static int32_t OV5640_IO_GetTick(void)
 static void Camera_Reset(void)
 {
   // Pull reset pin low for at least 1ms, then high
-  HAL_GPIO_WritePin(CAM_RESET_PORT, CAM_RESET_PIN, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, Reset_Pin, GPIO_PIN_RESET);
   HAL_Delay(2);  // Hold reset for 2ms
-  HAL_GPIO_WritePin(CAM_RESET_PORT, CAM_RESET_PIN, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOA, Reset_Pin, GPIO_PIN_SET);
   HAL_Delay(10); // Allow camera to boot up
 }
 
@@ -593,7 +597,7 @@ static void Camera_Reset(void)
 static void Camera_PowerUp(void)
 {
   // Set power down pin low to power up the camera
-  HAL_GPIO_WritePin(CAM_PWDN_PORT, CAM_PWDN_PIN, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, Shutdown_Pin, GPIO_PIN_RESET);
 }
 
 /**
