@@ -201,7 +201,7 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	// Main loop - camera is now initialized and ready for capture
 	HAL_Delay(1000);
-	HAL_UART_Transmit(&huart2, (uint8_t) "OV5640 Camera Test Starting...\r\n", sizeof((uint8_t)"OV5640 Camera Test Starting...\r\n"), HAL_MAX_DELAY);
+//	HAL_UART_Transmit(&huart2, (uint8_t) "OV5640 Camera Test Starting...\r\n", sizeof((uint8_t)"OV5640 Camera Test Starting...\r\n"), HAL_MAX_DELAY);
   }
   /* USER CODE END 3 */
 }
@@ -606,11 +606,11 @@ static void Camera_PowerUp(void)
   * @param  None
   * @retval None
   */
-int _write(int file, char *ptr, int len)
-{
-  HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
-  return len;
-}
+//int _write(int file, char *ptr, int len)
+//{
+//  HAL_UART_Transmit(&huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
+//  return len;
+//}
 
 /* USER CODE END 4 */
 
