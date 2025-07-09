@@ -129,7 +129,8 @@ int main(void)
   {
 
     /* USER CODE END WHILE */
-	  HAL_UART_Transmit(&huart2, tx_buffer, 27, 10);
+//	  HAL_UART_Transmit(&huart2, tx_buffer, 27, 10);
+	  printf("Welcome to STM32 world !\n\r");
 	  HAL_Delay(1000);
     /* USER CODE BEGIN 3 */
   }
