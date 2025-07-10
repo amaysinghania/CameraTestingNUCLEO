@@ -15,7 +15,7 @@
  *	DEFINES
  */
 
-#define OV5640_I2C_ADDR		(0x3C << 1)
+#define OV5640_I2C_ADDR		0x3C
 #define OV5640_ID_DEFAULT	0x5640U
 
 /*
