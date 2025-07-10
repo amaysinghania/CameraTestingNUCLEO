@@ -63,6 +63,9 @@ void Error_Handler(void);
 #define Shutdown_GPIO_Port GPIOF
 #define Reset_Pin GPIO_PIN_1
 #define Reset_GPIO_Port GPIOF
+#define Pix_Clock_Pin GPIO_PIN_2
+#define Pix_Clock_GPIO_Port GPIOF
+#define Pix_Clock_EXTI_IRQn EXTI2_IRQn
 #define LD2_Pin GPIO_PIN_1
 #define LD2_GPIO_Port GPIOE
 
