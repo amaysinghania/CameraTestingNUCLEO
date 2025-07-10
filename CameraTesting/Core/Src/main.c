@@ -137,7 +137,7 @@ int main(void)
   OV5640_SetPCLK(&cam, OV5640_PCLK_24M);
   printf("Clock Initialized");
   OV5640_Start(&cam);
-  printf("Camera Initialized");
+  printf("Camera Start");
   camImgReady = 1;
   while (1)
   {
@@ -422,7 +422,7 @@ static int32_t OV5640_IO_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData
   reg_addr[1] = Reg & 0xFF;         // Low byte
 
 
-  status = HAL_I2C_Mem_Write(&hi2c1, DevAddr, reg_addr, I2C_MEMADD_SIZE_8BIT, pData, Length, HAL_MAX_DELAY);
+  status = HAL_I2C_Mem_Write(&hi2c1, DevAddr, Z, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
   if (status != HAL_OK) {
     return -1;
   }
