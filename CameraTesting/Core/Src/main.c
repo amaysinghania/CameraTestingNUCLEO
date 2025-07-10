@@ -32,7 +32,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define OV5640_I2C_ADDRESS    (0x3C << 1)  // OV5640 I2C address
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -365,7 +365,106 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+/**
+  * @brief  Initialize Camera I/O structure
+  * @param  None
+  * @retval None
+  */
+static void Camera_IO_Init(void)
+{
+  // Configure the camera I/O structure with function pointers
+  io.Init       = OV5640_IO_Init;
+  io.DeInit     = OV5640_IO_DeInit;
+  io.Address    = OV5640_I2C_ADDRESS;
+  io.WriteReg   = OV5640_IO_WriteReg;
+  io.ReadReg    = OV5640_IO_ReadReg;
+  io.GetTick    = OV5640_IO_GetTick;
+}
 
+/**
+  * @brief  Initialize Camera I2C communication
+  * @param  None
+  * @retval 0 if OK, -1 if error
+  */
+static int32_t OV5640_IO_Init(void)
+{
+  // I2C is already initialized in MX_I2C1_Init()
+  // Could add additional initialization here if needed
+  return 0;
+}
+
+/**
+  * @brief  Deinitialize Camera I2C communication
+  * @param  None
+  * @retval 0 if OK, -1 if error
+  */
+static int32_t OV5640_IO_DeInit(void)
+{
+  // Could add deinitialization code here if needed
+  return 0;
+}
+
+/**
+  * @brief  Write camera register via I2C
+  * @param  DevAddr: Device I2C address
+  * @param  Reg: Register address
+  * @param  pData: Pointer to data buffer
+  * @param  Length: Data length
+  * @retval 0 if OK, -1 if error
+  */
+static int32_t OV5640_IO_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16_t Length)
+{
+  HAL_StatusTypeDef status;
+  uint8_t reg_addr[2];
+
+  // OV5640 uses 16-bit register addresses (big-endian)
+  reg_addr[0] = (Reg >> 8) & 0xFF;  // High byte
+  reg_addr[1] = Reg & 0xFF;         // Low byte
+
+
+  status = HAL_I2C_Mem_Write(&hi2c1, DevAddr, reg_addr, I2C_MEMADD_SIZE_8BIT, pData, Length, HAL_MAX_DELAY);
+  if (status != HAL_OK) {
+    return -1;
+  }
+
+  return 0;
+}
+
+/**
+  * @brief  Read camera register via I2C
+  * @param  DevAddr: Device I2C address
+  * @param  Reg: Register address
+  * @param  pData: Pointer to data buffer
+  * @param  Length: Data length
+  * @retval 0 if OK, -1 if error
+  */
+static int32_t OV5640_IO_ReadReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16_t Length)
+{
+  HAL_StatusTypeDef status;
+  uint8_t reg_addr[2];
+
+  // OV5640 uses 16-bit register addresses (big-endian)
+  reg_addr[0] = (Reg >> 8) & 0xFF;  // High byte
+  reg_addr[1] = Reg & 0xFF;         // Low byte
+
+  // Send register address then read data
+  status = HAL_I2C_Mem_Read(&hi2c1, DevAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
+  if (status != HAL_OK) {
+    return -1;
+  }
+
+  return 0;
+}
+
+/**
+  * @brief  Get system tick for timing operations
+  * @param  None
+  * @retval Current tick value
+  */
+static int32_t OV5640_IO_GetTick(void)
+{
+  return HAL_GetTick();
+}
 /* USER CODE END 4 */
 
 /**
