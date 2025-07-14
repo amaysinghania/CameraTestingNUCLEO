@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "usb_device.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -32,7 +31,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define OV5640_I2C_ADDRESS    (0x3C << 1)  // OV5640 I2C address
+#define OV5640_I2C_ADDRESS    (0x3C)  // OV5640 I2C address
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -48,10 +47,14 @@ DCMI_HandleTypeDef hdcmi;
 
 I2C_HandleTypeDef hi2c1;
 
+UART_HandleTypeDef huart2;
+
 /* USER CODE BEGIN PV */
 OV5640_Object_t cam;
 OV5640_IO_t io;
-uint8_t camImgReady;
+int32_t ret;
+uint32_t camera_id;
+int camImgReady;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -59,8 +62,18 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DCMI_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN PFP */
-
+// Camera I2C communication functions
+static int32_t OV5640_IO_Init(void);
+static int32_t OV5640_IO_DeInit(void);
+static int32_t OV5640_IO_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16_t Length);
+static int32_t OV5640_IO_ReadReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16_t Length);
+static int32_t OV5640_IO_GetTick(void);
+static void Camera_IO_Init(void);
+static void Camera_Reset(void);
+static void Camera_PowerUp(void);
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -103,9 +116,10 @@ int main(void)
   MX_GPIO_Init();
   MX_DCMI_Init();
   MX_I2C1_Init();
-  MX_USB_DEVICE_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  // Initialize Camera I/O functions
+    Camera_IO_Init();
   /* USER CODE END 2 */
 
   /* Initialize leds */
@@ -130,17 +144,77 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  OV5640_RegisterBusIO(&cam, &io);
-  printf("Bus Registered");
-  OV5640_Init(&cam, OV5640_R800x480, OV5640_JPEG);
-  printf("Camera Initialized");
-  OV5640_SetPCLK(&cam, OV5640_PCLK_24M);
-  printf("Clock Initialized");
-  OV5640_Start(&cam);
-  printf("Camera Start");
-  camImgReady = 1;
-  while (1)
-  {
+  printf("OV5640 Camera Test Starting...\r\n");
+
+      // Power up and reset the camera
+      printf("Powering up camera...\r\n");
+      Camera_PowerUp();
+      HAL_Delay(10);  // Allow power to stabilize
+
+      printf("Resetting camera...\r\n");
+      Camera_Reset();
+      HAL_Delay(50);  // Allow reset to complete
+
+      // Register camera I/O bus
+      printf("Registering camera I/O...\r\n");
+      ret = OV5640_RegisterBusIO(&cam, &io);
+      if (ret == OV5640_OK) {
+        printf("Camera I/O registration: SUCCESS\r\n");
+        BSP_LED_On(LED_GREEN);
+      } else {
+        printf("Camera I/O registration: FAILED (ret=%ld)\r\n", ret);
+        BSP_LED_On(LED_RED);
+        while(1); // Stop here if I/O registration fails
+      }
+
+      printf("Reading camera ID...\r\n");
+      uint8_t tmp = 0x0;
+      ret = OV5640_IO_ReadReg(OV5640_I2C_ADDRESS, OV5640_CHIP_ID_HIGH_BYTE, &tmp, 1);
+      if (ret != HAL_OK){
+      	printf("Failed to read register");
+      	BSP_LED_On(LED_RED);
+      } else {
+      	printf("Camera ID read: SUCCESS (ID=0x%hu)\r\n", &tmp);
+      }
+
+      // Initialize camera with VGA resolution and RGB565 format
+  	printf("Initializing camera with VGA resolution...\r\n");
+  	ret = OV5640_Init(&cam, OV5640_R640x480, OV5640_RGB565);
+  	if (ret == OV5640_OK) {
+  	  printf("Camera initialization: SUCCESS\r\n");
+  	  printf("Camera is ready for image capture!\r\n");
+  	} else {
+  	  printf("Camera initialization: FAILED (ret=%ld)\r\n", ret);
+  	}
+
+      // Try to read camera ID
+      printf("Reading camera ID...\r\n");
+      ret = OV5640_ReadID(&cam, &camera_id);
+      if (ret == OV5640_OK) {
+        printf("Camera ID read: SUCCESS (ID=0x%04lX)\r\n", camera_id);
+        if (camera_id == 0x5640) {
+          printf("OV5640 camera detected!\r\n");
+          BSP_LED_On(LED_BLUE);
+        } else {
+          printf("WARNING: Unexpected camera ID (expected 0x5640)\r\n");
+        }
+      } else {
+        printf("Camera ID read: FAILED (ret=%ld)\r\n", ret);
+        printf("Check I2C connections and camera power\r\n");
+      }
+
+      // Initialize camera with VGA resolution and RGB565 format
+      printf("Initializing camera with VGA resolution...\r\n");
+      ret = OV5640_Init(&cam, OV5640_R640x480, OV5640_RGB565);
+      if (ret == OV5640_OK) {
+        printf("Camera initialization: SUCCESS\r\n");
+        printf("Camera is ready for image capture!\r\n");
+      } else {
+        printf("Camera initialization: FAILED (ret=%ld)\r\n", ret);
+      }
+
+    while (1)
+    {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -267,7 +341,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x307075B1;
+  hi2c1.Init.Timing = 0x10707DBC;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -296,6 +370,54 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 115200;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetTxFifoThreshold(&huart2, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetRxFifoThreshold(&huart2, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_DisableFifoMode(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
 
 }
 
@@ -337,7 +459,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : Pix_Clock_Pin */
   GPIO_InitStruct.Pin = Pix_Clock_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(Pix_Clock_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA8 */
@@ -354,10 +476,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD2_GPIO_Port, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(Pix_Clock_EXTI_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(Pix_Clock_EXTI_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
@@ -379,6 +497,7 @@ static void Camera_IO_Init(void)
   io.WriteReg   = OV5640_IO_WriteReg;
   io.ReadReg    = OV5640_IO_ReadReg;
   io.GetTick    = OV5640_IO_GetTick;
+  camImgReady = 0;
 }
 
 /**
@@ -422,12 +541,12 @@ static int32_t OV5640_IO_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData
   reg_addr[1] = Reg & 0xFF;         // Low byte
 
 
-  status = HAL_I2C_Mem_Write(&hi2c1, DevAddr, Z, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
+  status = HAL_I2C_Mem_Write(&hi2c1, OV5640_I2C_ADDRESS, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY); // OV5640_I2C_ADDRESS = 0x32
   if (status != HAL_OK) {
-    return -1;
+	return OV5640_ERROR;
   }
 
-  return 0;
+  return OV5640_OK;
 }
 
 /**
@@ -448,12 +567,12 @@ static int32_t OV5640_IO_ReadReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData,
   reg_addr[1] = Reg & 0xFF;         // Low byte
 
   // Send register address then read data
-  status = HAL_I2C_Mem_Read(&hi2c1, DevAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
+  status = HAL_I2C_Mem_Read(&hi2c1, OV5640_I2C_ADDRESS, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY); //OV5640_I2C_ADDRESS = 0x3C but I tried with 0x3C << 1 and 0x79.
   if (status != HAL_OK) {
-    return -1;
-  }
+  	return OV5640_ERROR;
+    }
 
-  return 0;
+return OV5640_OK;
 }
 
 /**
@@ -464,6 +583,32 @@ static int32_t OV5640_IO_ReadReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData,
 static int32_t OV5640_IO_GetTick(void)
 {
   return HAL_GetTick();
+}
+
+/**
+  * @brief  Reset the camera module
+  * @param  None
+  * @retval None
+  */
+static void Camera_Reset(void)
+{
+  // Pull reset pin low for at least 1ms, then high
+  HAL_GPIO_WritePin(GPIOA, Reset_Pin, GPIO_PIN_RESET);
+  HAL_Delay(2);  // Hold reset for 2ms
+  HAL_GPIO_WritePin(GPIOA, Reset_Pin, GPIO_PIN_SET);
+  HAL_Delay(50); // Allow camera to boot up
+}
+
+/**
+  * @brief  Power up the camera module
+  * @param  None
+  * @retval None
+  */
+static void Camera_PowerUp(void)
+{
+  // Set power down pin low to power up the camera
+  HAL_GPIO_WritePin(GPIOA, Shutdown_Pin, GPIO_PIN_RESET);
+  HAL_Delay(50); // Allow camera to boot up
 }
 /* USER CODE END 4 */
 
