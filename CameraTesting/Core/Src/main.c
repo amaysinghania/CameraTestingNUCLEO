@@ -31,7 +31,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define OV5640_I2C_ADDRESS    0x78  // OV5640 I2C address (0x3C << 1)
+#define OV5640_I2C_ADDRESS    (0x3C)  // OV5640 I2C address (0x3C << 1)
 
 // Optional camera control pins (you can configure these in CubeMX if needed)
 #define CAM_RESET_PIN         GPIO_PIN_0
@@ -165,6 +165,16 @@ int main(void)
       printf("Camera I/O registration: FAILED (ret=%ld)\r\n", ret);
       BSP_LED_On(LED_RED);
       while(1); // Stop here if I/O registration fails
+    }
+
+    printf("Reading camera ID...\r\n");
+    uint8_t tmp = 0x0;
+    ret = OV5640_IO_ReadReg(camera_id, OV5640_CHIP_ID_HIGH_BYTE, &tmp, 1);
+    if (ret != HAL_OK){
+    	printf("Failed to read register");
+    	BSP_LED_On(LED_RED);
+    } else {
+    	printf("Camera ID read: SUCCESS (ID=0x%hu)\r\n", &tmp);
     }
 
     // Try to read camera ID
@@ -320,7 +330,7 @@ static void MX_I2C1_Init(void)
 
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x307075B1;
+  hi2c1.Init.Timing = 0x10707DBC;
   hi2c1.Init.OwnAddress1 = 0;
   hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
   hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
@@ -525,19 +535,13 @@ static int32_t OV5640_IO_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData
   reg_addr[0] = (Reg >> 8) & 0xFF;  // High byte
   reg_addr[1] = Reg & 0xFF;         // Low byte
 
-  // First, send the register address
-  status = HAL_I2C_Master_Transmit(&hi2c1, DevAddr, reg_addr, 2, HAL_MAX_DELAY);
+
+  status = HAL_I2C_Mem_Write(&hi2c1, OV5640_ID, Reg, I2C_MEMADD_SIZE_8BIT, pData, Length, HAL_MAX_DELAY);
   if (status != HAL_OK) {
-    return -1;
+	return OV5640_ERROR;
   }
 
-  // Then, send the data
-  status = HAL_I2C_Master_Transmit(&hi2c1, DevAddr, pData, Length, HAL_MAX_DELAY);
-  if (status != HAL_OK) {
-    return -1;
-  }
-
-  return 0;
+  return OV5640_OK;
 }
 
 /**
@@ -558,12 +562,12 @@ static int32_t OV5640_IO_ReadReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData,
   reg_addr[1] = Reg & 0xFF;         // Low byte
 
   // Send register address then read data
-  status = HAL_I2C_Mem_Read(&hi2c1, DevAddr, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
+  status = HAL_I2C_Mem_Read(&hi2c1, DevAddr, Reg, I2C_MEMADD_SIZE_8BIT, pData, Length, HAL_MAX_DELAY);
   if (status != HAL_OK) {
-    return -1;
-  }
+  	return OV5640_ERROR;
+    }
 
-  return 0;
+return OV5640_OK;
 }
 
 /**
@@ -587,7 +591,7 @@ static void Camera_Reset(void)
   HAL_GPIO_WritePin(GPIOA, Reset_Pin, GPIO_PIN_RESET);
   HAL_Delay(2);  // Hold reset for 2ms
   HAL_GPIO_WritePin(GPIOA, Reset_Pin, GPIO_PIN_SET);
-  HAL_Delay(10); // Allow camera to boot up
+  HAL_Delay(50); // Allow camera to boot up
 }
 
 /**
@@ -599,6 +603,7 @@ static void Camera_PowerUp(void)
 {
   // Set power down pin low to power up the camera
   HAL_GPIO_WritePin(GPIOA, Shutdown_Pin, GPIO_PIN_RESET);
+  HAL_Delay(50); // Allow camera to boot up
 }
 
 /**

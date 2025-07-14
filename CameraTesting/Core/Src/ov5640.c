@@ -1009,17 +1009,18 @@ int32_t OV5640_ReadID(OV5640_Object_t *pObj, uint32_t *Id)
 
   /* Prepare the camera to be configured */
   tmp = 0x80;
-  if (ov5640_write_reg(&pObj->Ctx, OV5640_SYSTEM_CTROL0, &tmp, 1) != OV5640_OK)
-  {
-    ret = OV5640_ERROR;
-  }
-  else
-  {
+//  if (ov5640_write_reg(&pObj->Ctx, OV5640_SYSTEM_CTROL0, &tmp, 1) != OV5640_OK)
+//  {
+//    ret = OV5640_ERROR;
+//  }
+//  else
+//  {
     (void)OV5640_Delay(pObj, 500);
 
     if (ov5640_read_reg(&pObj->Ctx, OV5640_CHIP_ID_HIGH_BYTE, &tmp, 1) != OV5640_OK)
     {
       ret = OV5640_ERROR;
+      printf("Error in reading High Byte\r\n");
     }
     else
     {
@@ -1027,14 +1028,16 @@ int32_t OV5640_ReadID(OV5640_Object_t *pObj, uint32_t *Id)
       if (ov5640_read_reg(&pObj->Ctx, OV5640_CHIP_ID_LOW_BYTE, &tmp, 1) != OV5640_OK)
       {
         ret = OV5640_ERROR;
+        printf("Error in reading Low Byte\r\n");
       }
       else
       {
         *Id |= tmp;
         ret = OV5640_OK;
+        printf("SUCCESSFULLY read ID (ID=0x%04lX)\r\n", *Id);
       }
     }
-  }
+//  }
 
   /* Component status */
   return ret;
