@@ -169,13 +169,23 @@ int main(void)
 
     printf("Reading camera ID...\r\n");
     uint8_t tmp = 0x0;
-    ret = OV5640_IO_ReadReg(camera_id, OV5640_CHIP_ID_HIGH_BYTE, &tmp, 1);
+    ret = OV5640_IO_ReadReg(OV5640_I2C_ADDRESS, OV5640_CHIP_ID_HIGH_BYTE, &tmp, 1);
     if (ret != HAL_OK){
     	printf("Failed to read register");
     	BSP_LED_On(LED_RED);
     } else {
     	printf("Camera ID read: SUCCESS (ID=0x%hu)\r\n", &tmp);
     }
+
+    // Initialize camera with VGA resolution and RGB565 format
+	printf("Initializing camera with VGA resolution...\r\n");
+	ret = OV5640_Init(&cam, OV5640_R640x480, OV5640_RGB565);
+	if (ret == OV5640_OK) {
+	  printf("Camera initialization: SUCCESS\r\n");
+	  printf("Camera is ready for image capture!\r\n");
+	} else {
+	  printf("Camera initialization: FAILED (ret=%ld)\r\n", ret);
+	}
 
     // Try to read camera ID
     printf("Reading camera ID...\r\n");
@@ -536,7 +546,7 @@ static int32_t OV5640_IO_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData
   reg_addr[1] = Reg & 0xFF;         // Low byte
 
 
-  status = HAL_I2C_Mem_Write(&hi2c1, OV5640_ID, Reg, I2C_MEMADD_SIZE_8BIT, pData, Length, HAL_MAX_DELAY);
+  status = HAL_I2C_Mem_Write(&hi2c1, 0x78, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
   if (status != HAL_OK) {
 	return OV5640_ERROR;
   }
@@ -562,7 +572,7 @@ static int32_t OV5640_IO_ReadReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData,
   reg_addr[1] = Reg & 0xFF;         // Low byte
 
   // Send register address then read data
-  status = HAL_I2C_Mem_Read(&hi2c1, DevAddr, Reg, I2C_MEMADD_SIZE_8BIT, pData, Length, HAL_MAX_DELAY);
+  status = HAL_I2C_Mem_Read(&hi2c1, 0x79, Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
   if (status != HAL_OK) {
   	return OV5640_ERROR;
     }
