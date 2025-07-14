@@ -225,50 +225,6 @@ int main(void)
 	HAL_Delay(10);  // Allow power to stabilize
   Test_OV5640_BSP_Driver();
 
-	printf("Resetting camera...\r\n");
-	Camera_Reset();
-	HAL_Delay(50);  // Allow reset to complete
-
-	// Register camera I/O bus
-	printf("Registering camera I/O...\r\n");
-	ret = OV5640_RegisterBusIO(&cam, &io);
-	if (ret == OV5640_OK) {
-		printf("Camera I/O registration: SUCCESS\r\n");
-		BSP_LED_On(LED_GREEN);
-	} else {
-		printf("Camera I/O registration: FAILED (ret=%ld)\r\n", ret);
-		BSP_LED_On(LED_RED);
-		while(1); // Stop here if I/O registration fails
-	}
-
-	// Try to read camera ID
-	printf("Reading camera ID...\r\n");
-	ret = OV5640_ReadID(&cam, &camera_id);
-	if (ret == OV5640_OK) {
-		printf("Camera ID read: SUCCESS (ID=0x%04lX)\r\n", camera_id);
-		if (camera_id == 0x5640) {
-			printf("OV5640 camera detected!\r\n");
-			BSP_LED_On(LED_BLUE);
-		} else {
-			printf("WARNING: Unexpected camera ID (expected 0x5640)\r\n");
-		}
-	} else {
-		printf("Camera ID read: FAILED (ret=%ld)\r\n", ret);
-		printf("Check I2C connections and camera power\r\n");
-	}
-
-	// Initialize camera with VGA resolution and RGB565 format
-	printf("Initializing camera with VGA resolution...\r\n");
-	ret = OV5640_Init(&cam, OV5640_R640x480, OV5640_RGB565);
-	if (ret == OV5640_OK) {
-		printf("Camera initialization: SUCCESS\r\n");
-		printf("Camera is ready for image capture!\r\n");
-	} else {
-		printf("Camera initialization: FAILED (ret=%ld)\r\n", ret);
-	}
-
-    while (1)
-    {
   while (1)
   {
     /* USER CODE END WHILE */
