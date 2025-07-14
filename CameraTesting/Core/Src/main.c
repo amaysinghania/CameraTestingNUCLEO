@@ -31,7 +31,13 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define OV5640_I2C_ADDRESS    (0x3C)  // OV5640 I2C address
+#define OV5640_I2C_ADDRESS    (0x3C)  // OV5640 I2C address (0x3C << 1)
+
+// Optional camera control pins (you can configure these in CubeMX if needed)
+#define CAM_RESET_PIN         GPIO_PIN_0
+#define CAM_RESET_PORT        GPIOB
+#define CAM_PWDN_PIN          GPIO_PIN_14
+#define CAM_PWDN_PORT         GPIOB
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -73,7 +79,6 @@ static int32_t OV5640_IO_GetTick(void);
 static void Camera_IO_Init(void);
 static void Camera_Reset(void);
 static void Camera_PowerUp(void);
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -82,6 +87,70 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if (GPIO_Pin == Pix_Clock_Pin){
 		camImgReady = 1;
 	}
+}
+
+/**
+  * @brief  Test OV5640 using the BSP driver functions
+  * @param  None
+  * @retval None
+  */
+void Test_OV5640_BSP_Driver(void)
+{
+  printf("=== OV5640 BSP Driver Test ===\r\n");
+
+  // Initialize I/O structure
+  Camera_IO_Init();
+
+  // Register bus I/O
+  printf("Registering BSP I/O...\r\n");
+  ret = OV5640_RegisterBusIO(&cam, &io);
+  if (ret == OV5640_OK) {
+    printf("✓ BSP I/O registration successful\r\n");
+  } else {
+    printf("✗ BSP I/O registration failed (ret=%ld)\r\n", ret);
+    return;
+  }
+
+  // Test ReadID function
+  printf("Testing OV5640_ReadID()...\r\n");
+  ret = OV5640_ReadID(&cam, &camera_id);
+  if (ret == OV5640_OK) {
+    printf("✓ OV5640_ReadID successful: ID=0x%04lX\r\n", camera_id);
+    if (camera_id == 0x5640) {
+      printf("✓ Correct OV5640 chip detected\r\n");
+      BSP_LED_On(LED_BLUE);
+    } else {
+      printf("⚠ Unexpected chip ID (expected 0x5640)\r\n");
+    }
+  } else {
+    printf("✗ OV5640_ReadID failed (ret=%ld)\r\n", ret);
+  }
+
+  // Test camera capabilities
+  OV5640_Capabilities_t caps;
+  printf("Testing OV5640_GetCapabilities()...\r\n");
+  ret = OV5640_GetCapabilities(&cam, &caps);
+  if (ret == OV5640_OK) {
+    printf("✓ Camera capabilities read successfully\r\n");
+    printf("  Resolution config: %ld\r\n", caps.Config_Resolution);
+    printf("  Brightness config: %ld\r\n", caps.Config_Brightness);
+    printf("  Contrast config: %ld\r\n", caps.Config_Contrast);
+  } else {
+    printf("✗ Failed to read camera capabilities (ret=%ld)\r\n", ret);
+  }
+
+  // Test camera initialization
+  printf("Testing OV5640_Init()...\r\n");
+  ret = OV5640_Init(&cam, OV5640_R640x480, OV5640_RGB565);
+  if (ret == OV5640_OK) {
+    printf("✓ OV5640_Init successful (VGA, RGB565)\r\n");
+    printf("✓ Camera is ready for image capture!\r\n");
+    BSP_LED_On(LED_GREEN);
+  } else {
+    printf("✗ OV5640_Init failed (ret=%ld)\r\n", ret);
+  }
+
+  printf("=============================\r\n\r\n");
 }
 /* USER CODE END 0 */
 
@@ -118,8 +187,7 @@ int main(void)
   MX_I2C1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  // Initialize Camera I/O functions
-    Camera_IO_Init();
+
   /* USER CODE END 2 */
 
   /* Initialize leds */
@@ -143,13 +211,19 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  printf("Power up camera...\r\n");
+  Camera_PowerUp();
+  HAL_Delay(10);
 
-  printf("OV5640 Camera Test Starting...\r\n");
+  printf("Reset camera...\r\n");
+  Camera_Reset();
+  HAL_Delay(50);
 
 	// Power up and reset the camera
 	printf("Powering up camera...\r\n");
 	Camera_PowerUp();
 	HAL_Delay(10);  // Allow power to stabilize
+  Test_OV5640_BSP_Driver();
 
 	printf("Resetting camera...\r\n");
 	Camera_Reset();
@@ -195,6 +269,8 @@ int main(void)
 
     while (1)
     {
+  while (1)
+  {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -203,6 +279,7 @@ int main(void)
 				printf("Image Ready");
 				camImgReady = 0;
 			}
+			HAL_Delay(10);
     }
   /* USER CODE END 3 */
 }
