@@ -51,6 +51,8 @@ COM_InitTypeDef BspCOMInit;
 
 DCMI_HandleTypeDef hdcmi;
 
+DMA2D_HandleTypeDef hdma2d;
+
 I2C_HandleTypeDef hi2c1;
 
 UART_HandleTypeDef huart2;
@@ -60,7 +62,6 @@ OV5640_Object_t cam;
 OV5640_IO_t io;
 int32_t ret;
 uint32_t camera_id;
-int camImgReady;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -69,6 +70,7 @@ static void MX_GPIO_Init(void);
 static void MX_DCMI_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_DMA2D_Init(void);
 /* USER CODE BEGIN PFP */
 // Camera I2C communication functions
 static int32_t OV5640_IO_Init(void);
@@ -83,11 +85,6 @@ static void Camera_PowerUp(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
-	if (GPIO_Pin == Pix_Clock_Pin){
-		camImgReady = 1;
-	}
-}
 
 /**
   * @brief  Test OV5640 using the BSP driver functions
@@ -186,6 +183,7 @@ int main(void)
   MX_DCMI_Init();
   MX_I2C1_Init();
   MX_USART2_UART_Init();
+  MX_DMA2D_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -230,11 +228,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-			if(camImgReady){
-				printf("Image Ready");
-				camImgReady = 0;
-			}
 			HAL_Delay(10);
     }
   /* USER CODE END 3 */
@@ -335,6 +328,46 @@ static void MX_DCMI_Init(void)
   /* USER CODE BEGIN DCMI_Init 2 */
 
   /* USER CODE END DCMI_Init 2 */
+
+}
+
+/**
+  * @brief DMA2D Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_DMA2D_Init(void)
+{
+
+  /* USER CODE BEGIN DMA2D_Init 0 */
+
+  /* USER CODE END DMA2D_Init 0 */
+
+  /* USER CODE BEGIN DMA2D_Init 1 */
+
+  /* USER CODE END DMA2D_Init 1 */
+  hdma2d.Instance = DMA2D;
+  hdma2d.Init.Mode = DMA2D_M2M;
+  hdma2d.Init.ColorMode = DMA2D_OUTPUT_ARGB8888;
+  hdma2d.Init.OutputOffset = 0;
+  hdma2d.LayerCfg[1].InputOffset = 0;
+  hdma2d.LayerCfg[1].InputColorMode = DMA2D_INPUT_ARGB8888;
+  hdma2d.LayerCfg[1].AlphaMode = DMA2D_NO_MODIF_ALPHA;
+  hdma2d.LayerCfg[1].InputAlpha = 0;
+  hdma2d.LayerCfg[1].AlphaInverted = DMA2D_REGULAR_ALPHA;
+  hdma2d.LayerCfg[1].RedBlueSwap = DMA2D_RB_REGULAR;
+  hdma2d.LayerCfg[1].ChromaSubSampling = DMA2D_NO_CSS;
+  if (HAL_DMA2D_Init(&hdma2d) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_DMA2D_ConfigLayer(&hdma2d, 1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN DMA2D_Init 2 */
+
+  /* USER CODE END DMA2D_Init 2 */
 
 }
 
@@ -475,12 +508,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(Reset_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : Pix_Clock_Pin */
-  GPIO_InitStruct.Pin = Pix_Clock_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(Pix_Clock_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA8 */
   GPIO_InitStruct.Pin = GPIO_PIN_8;
