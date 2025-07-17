@@ -38,6 +38,10 @@
 #define CAM_RESET_PORT        GPIOB
 #define CAM_PWDN_PIN          GPIO_PIN_14
 #define CAM_PWDN_PORT         GPIOB
+
+#define FRAME_WIDTH  640
+#define FRAME_HEIGHT 480
+#define FRAME_BUFFER_SIZE (FRAME_WIDTH * FRAME_HEIGHT)
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,27 +54,42 @@
 COM_InitTypeDef BspCOMInit;
 
 DCMI_HandleTypeDef hdcmi;
-
-DMA2D_HandleTypeDef hdma2d;
+DMA_HandleTypeDef hdma_dcmi;
 
 I2C_HandleTypeDef hi2c1;
+
+TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+
+/* --- FREQUENCY MEASUREMENT VARIABLES --- */
+volatile uint32_t IC_Val1 = 0;
+volatile uint32_t IC_Val2 = 0;
+volatile uint32_t Difference = 0;
+volatile uint8_t Is_First_Captured = 0; // 0 = not captured, 1 = captured
+volatile float Frequency = 0.0f;
+extern TIM_HandleTypeDef htim2; // Make sure the timer handle is accessible
+/* --- END FREQUENCY MEASUREMENT VARIABLES --- */
+
 OV5640_Object_t cam;
 OV5640_IO_t io;
 int32_t ret;
 uint32_t camera_id;
+
+uint8_t frame_buffer[FRAME_BUFFER_SIZE] __attribute__((section(".sram1")));
+volatile uint8_t camImgReady = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DCMI_Init(void);
+static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
+static void MX_DCMI_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_DMA2D_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 // Camera I2C communication functions
 static int32_t OV5640_IO_Init(void);
@@ -81,6 +100,7 @@ static int32_t OV5640_IO_GetTick(void);
 static void Camera_IO_Init(void);
 static void Camera_Reset(void);
 static void Camera_PowerUp(void);
+static void capture_image(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -91,8 +111,12 @@ static void Camera_PowerUp(void);
   * @param  None
   * @retval None
   */
-void Test_OV5640_BSP_Driver(void)
+void InitOV5640(void)
 {
+  Camera_PowerUp();
+  Camera_Reset();
+	Camera_PowerUp();
+
   printf("=== OV5640 BSP Driver Test ===\r\n");
 
   // Initialize I/O structure
@@ -140,10 +164,16 @@ void Test_OV5640_BSP_Driver(void)
   printf("Testing OV5640_Init()...\r\n");
   ret = OV5640_Init(&cam, OV5640_R640x480, OV5640_RGB565);
   if (ret == OV5640_OK) {
-    printf("✓ OV5640_Init successful (VGA, RGB565)\r\n");
-    printf("✓ Camera is ready for image capture!\r\n");
-    BSP_LED_On(LED_GREEN);
-  } else {
+  	ret = OV5640_SetPCLK(&cam, OV5640_PCLK_24M);
+  	if (ret == OV5640_OK) {
+			printf("✓ OV5640_Init successful (VGA, JPEG)\r\n");
+			printf("✓ Camera is ready for image capture!\r\n");
+			BSP_LED_On(LED_GREEN);
+  	} else {
+      printf("✗ OV5640_SetPCLK failed (ret=%ld)\r\n", ret);
+    }
+  }
+  else {
     printf("✗ OV5640_Init failed (ret=%ld)\r\n", ret);
   }
 
@@ -180,10 +210,11 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DCMI_Init();
+  MX_DMA_Init();
   MX_I2C1_Init();
+  MX_DCMI_Init();
   MX_USART2_UART_Init();
-  MX_DMA2D_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -209,27 +240,29 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  printf("Power up camera...\r\n");
-  Camera_PowerUp();
-  HAL_Delay(10);
+  InitOV5640();
 
-  printf("Reset camera...\r\n");
-  Camera_Reset();
-  HAL_Delay(50);
+  // Start the timer in Input Capture interrupt mode on Channel 1
+  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+  printf("Frequency measurement started.\r\n");
 
-	// Power up and reset the camera
-	printf("Powering up camera...\r\n");
-	Camera_PowerUp();
-	HAL_Delay(10);  // Allow power to stabilize
-  Test_OV5640_BSP_Driver();
+//  OV5640_Start(&cam);
+//  printf("Taking Photo\r\n");
+//  capture_image();
+//  printf("Image Taken\r\n");
+//  printf("Sending frame over COM\r\n");
+//  for (int i = 0; i < 100; i++) {
+//      printf("%02X ", frame_buffer[i]);
+//  }
 
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-			HAL_Delay(10);
-    }
+  	printf("Frequency: %.2f Hz\r\n", Frequency);
+		HAL_Delay(1000);
+  }
   /* USER CODE END 3 */
 }
 
@@ -312,11 +345,11 @@ static void MX_DCMI_Init(void)
   hdcmi.Instance = DCMI;
   hdcmi.Init.SynchroMode = DCMI_SYNCHRO_HARDWARE;
   hdcmi.Init.PCKPolarity = DCMI_PCKPOLARITY_RISING;
-  hdcmi.Init.VSPolarity = DCMI_VSPOLARITY_LOW;
-  hdcmi.Init.HSPolarity = DCMI_HSPOLARITY_LOW;
+  hdcmi.Init.VSPolarity = DCMI_VSPOLARITY_HIGH;
+  hdcmi.Init.HSPolarity = DCMI_HSPOLARITY_HIGH;
   hdcmi.Init.CaptureRate = DCMI_CR_ALL_FRAME;
   hdcmi.Init.ExtendedDataMode = DCMI_EXTEND_DATA_8B;
-  hdcmi.Init.JPEGMode = DCMI_JPEG_DISABLE;
+  hdcmi.Init.JPEGMode = DCMI_JPEG_ENABLE;
   hdcmi.Init.ByteSelectMode = DCMI_BSM_ALL;
   hdcmi.Init.ByteSelectStart = DCMI_OEBS_ODD;
   hdcmi.Init.LineSelectMode = DCMI_LSM_ALL;
@@ -328,46 +361,6 @@ static void MX_DCMI_Init(void)
   /* USER CODE BEGIN DCMI_Init 2 */
 
   /* USER CODE END DCMI_Init 2 */
-
-}
-
-/**
-  * @brief DMA2D Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_DMA2D_Init(void)
-{
-
-  /* USER CODE BEGIN DMA2D_Init 0 */
-
-  /* USER CODE END DMA2D_Init 0 */
-
-  /* USER CODE BEGIN DMA2D_Init 1 */
-
-  /* USER CODE END DMA2D_Init 1 */
-  hdma2d.Instance = DMA2D;
-  hdma2d.Init.Mode = DMA2D_M2M;
-  hdma2d.Init.ColorMode = DMA2D_OUTPUT_ARGB8888;
-  hdma2d.Init.OutputOffset = 0;
-  hdma2d.LayerCfg[1].InputOffset = 0;
-  hdma2d.LayerCfg[1].InputColorMode = DMA2D_INPUT_ARGB8888;
-  hdma2d.LayerCfg[1].AlphaMode = DMA2D_NO_MODIF_ALPHA;
-  hdma2d.LayerCfg[1].InputAlpha = 0;
-  hdma2d.LayerCfg[1].AlphaInverted = DMA2D_REGULAR_ALPHA;
-  hdma2d.LayerCfg[1].RedBlueSwap = DMA2D_RB_REGULAR;
-  hdma2d.LayerCfg[1].ChromaSubSampling = DMA2D_NO_CSS;
-  if (HAL_DMA2D_Init(&hdma2d) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_DMA2D_ConfigLayer(&hdma2d, 1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN DMA2D_Init 2 */
-
-  /* USER CODE END DMA2D_Init 2 */
 
 }
 
@@ -420,6 +413,64 @@ static void MX_I2C1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+  TIM_IC_InitTypeDef sConfigIC = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 0;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 4294967295;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_IC_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+  sConfigIC.ICFilter = 0;
+  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -464,6 +515,22 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
 
 }
 
@@ -530,6 +597,120 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+/**
+  * @brief  Input Capture callback in non-blocking mode
+  * @param  htim: TIM handle
+  * @retval None
+  */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+  // Make sure the interrupt is from the correct timer (TIM2)
+  if (htim->Instance == TIM2)
+  {
+    // Check if the interrupt is from Channel 1
+    if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+    {
+      if (Is_First_Captured == 0) // If this is the first rising edge
+      {
+        IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+        Is_First_Captured = 1;
+      }
+      else // If this is the second rising edge
+      {
+        IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+
+        if (IC_Val2 > IC_Val1)
+        {
+          Difference = IC_Val2 - IC_Val1;
+        }
+        else if (IC_Val1 > IC_Val2) // Handle timer counter overflow
+        {
+          // The counter has reset to 0 between captures
+        	printf("Timer Counter Overflow");
+          Difference = (htim->Init.Period - IC_Val1) + IC_Val2;
+        }
+        else
+        {
+          // This case should not happen, but reset if it does
+        	printf("Last Else");
+          Is_First_Captured = 0;
+          return;
+        }
+
+        // --- Calculate Frequency ---
+        // Get the timer's source clock frequency
+        // For TIM2 on H753, the source clock is APB1 Timer Clock
+        float timer_clock = (float)HAL_RCC_GetPCLK1Freq() * 2;
+
+        // The actual timer counter clock is the source clock divided by the prescaler
+        float counter_clock = timer_clock / (float)(htim->Init.Prescaler + 1);
+
+        // Frequency is the counter clock divided by the number of ticks in one period
+        Frequency = counter_clock / (float)Difference;
+
+        Is_First_Captured = 0; // Reset for the next measurement cycle
+      }
+    }
+  }
+}
+
+/**
+  * @brief  Captures a frame from the camera using DCMI and DMA.
+  * @retval None
+  */
+static void capture_image(void)
+{
+  camImgReady = 0;
+
+  printf("Starting image capture...\r\n");
+
+  if (HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buffer, FRAME_BUFFER_SIZE / 4) != HAL_OK)
+  {
+    printf("✗ Failed to start DCMI DMA\r\n");
+    Error_Handler();
+  }
+
+  // Wait for frame ready
+  while (camImgReady == 0)
+  {
+//  	printf("DCMI state: %d\r\n", hdcmi.State);
+//  	printf("DMA error: 0x%08lx\r\n", HAL_DMA_GetError(hdcmi.DMA_Handle));
+    HAL_Delay(1);
+  }
+
+  printf("✓ Frame captured into RAM\r\n");
+
+  // Optional: Print a small portion of the data
+  for (int i = 0; i < 32; i++) {
+    printf("%02X ", frame_buffer[i]);
+  }
+  printf("\r\n");
+}
+
+void IT_FRAME(DCMI_HandleTypeDef *hdcmi)
+{
+	printf("Frame callback fired!\r\n");
+  camImgReady = 1;
+  HAL_DCMI_Stop(hdcmi);
+}
+
+void IT_LINE(DCMI_HandleTypeDef *hdcmi)
+{
+	printf("Line finished!!\r\n");
+}
+
+void IT_ERR(DCMI_HandleTypeDef *hdcmi)
+{
+	printf("Error detected in frame detection!!\r\n");
+}
+
+void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
+{
+	printf("HAL_DCMI_FrameEventCallback callback fired!\r\n");
+	camImgReady = 1;
+	HAL_DCMI_Stop(hdcmi);
+}
+
 /**
   * @brief  Initialize Camera I/O structure
   * @param  None
@@ -630,10 +811,12 @@ static int32_t OV5640_IO_GetTick(void)
 static void Camera_Reset(void)
 {
   // Pull reset pin low for at least 1ms, then high
+	printf("Resetting up camera...\r\n");
   HAL_GPIO_WritePin(Reset_GPIO_Port, Reset_Pin, GPIO_PIN_RESET);
   HAL_Delay(2);  // Hold reset for 2ms
   HAL_GPIO_WritePin(Reset_GPIO_Port, Reset_Pin, GPIO_PIN_SET);
-  HAL_Delay(50); // Allow camera to boot up
+  HAL_Delay(60); // Allow camera to boot up
+  printf("=============================\r\n\r\n");
 }
 
 /**
@@ -644,8 +827,11 @@ static void Camera_Reset(void)
 static void Camera_PowerUp(void)
 {
   // Set power down pin low to power up the camera
+	printf("Powering up camera...\r\n");
   HAL_GPIO_WritePin(Shutdown_GPIO_Port, Shutdown_Pin, GPIO_PIN_RESET);
-  HAL_Delay(50); // Allow camera to boot up
+  HAL_Delay(60); // Allow camera to boot up
+  printf("=============================\r\n\r\n");
+
 }
 /* USER CODE END 4 */
 
