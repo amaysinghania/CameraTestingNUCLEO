@@ -42,6 +42,9 @@
 #define FRAME_WIDTH  640
 #define FRAME_HEIGHT 480
 #define FRAME_BUFFER_SIZE (FRAME_WIDTH * FRAME_HEIGHT)
+
+#define True 							1
+#define False 						0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -58,21 +61,9 @@ DMA_HandleTypeDef hdma_dcmi;
 
 I2C_HandleTypeDef hi2c1;
 
-TIM_HandleTypeDef htim2;
-
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-
-/* --- FREQUENCY MEASUREMENT VARIABLES --- */
-volatile uint32_t IC_Val1 = 0;
-volatile uint32_t IC_Val2 = 0;
-volatile uint32_t Difference = 0;
-volatile uint8_t Is_First_Captured = 0; // 0 = not captured, 1 = captured
-volatile float Frequency = 0.0f;
-extern TIM_HandleTypeDef htim2; // Make sure the timer handle is accessible
-/* --- END FREQUENCY MEASUREMENT VARIABLES --- */
-
 OV5640_Object_t cam;
 OV5640_IO_t io;
 int32_t ret;
@@ -89,7 +80,6 @@ static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_DCMI_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 // Camera I2C communication functions
 static int32_t OV5640_IO_Init(void);
@@ -214,7 +204,6 @@ int main(void)
   MX_I2C1_Init();
   MX_DCMI_Init();
   MX_USART2_UART_Init();
-  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -241,27 +230,16 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   InitOV5640();
-
-  // Start the timer in Input Capture interrupt mode on Channel 1
-  HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
-  printf("Frequency measurement started.\r\n");
-
-//  OV5640_Start(&cam);
-//  printf("Taking Photo\r\n");
-//  capture_image();
-//  printf("Image Taken\r\n");
-//  printf("Sending frame over COM\r\n");
-//  for (int i = 0; i < 100; i++) {
-//      printf("%02X ", frame_buffer[i]);
-//  }
+  OV5640_Start(&cam);
+  printf("Taking Photo\r\n");
+  capture_image();
 
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  	printf("Frequency: %.2f Hz\r\n", Frequency);
-		HAL_Delay(1000);
+  	HAL_Delay(10);
   }
   /* USER CODE END 3 */
 }
@@ -413,64 +391,6 @@ static void MX_I2C1_Init(void)
 }
 
 /**
-  * @brief TIM2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_TIM2_Init(void)
-{
-
-  /* USER CODE BEGIN TIM2_Init 0 */
-
-  /* USER CODE END TIM2_Init 0 */
-
-  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-  TIM_MasterConfigTypeDef sMasterConfig = {0};
-  TIM_IC_InitTypeDef sConfigIC = {0};
-
-  /* USER CODE BEGIN TIM2_Init 1 */
-
-  /* USER CODE END TIM2_Init 1 */
-  htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 0;
-  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim2.Init.Period = 4294967295;
-  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  if (HAL_TIM_IC_Init(&htim2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
-  sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
-  sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
-  sConfigIC.ICFilter = 0;
-  if (HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN TIM2_Init 2 */
-
-  /* USER CODE END TIM2_Init 2 */
-
-}
-
-/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -598,69 +518,12 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 /**
-  * @brief  Input Capture callback in non-blocking mode
-  * @param  htim: TIM handle
-  * @retval None
-  */
-void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
-{
-  // Make sure the interrupt is from the correct timer (TIM2)
-  if (htim->Instance == TIM2)
-  {
-    // Check if the interrupt is from Channel 1
-    if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
-    {
-      if (Is_First_Captured == 0) // If this is the first rising edge
-      {
-        IC_Val1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-        Is_First_Captured = 1;
-      }
-      else // If this is the second rising edge
-      {
-        IC_Val2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
-
-        if (IC_Val2 > IC_Val1)
-        {
-          Difference = IC_Val2 - IC_Val1;
-        }
-        else if (IC_Val1 > IC_Val2) // Handle timer counter overflow
-        {
-          // The counter has reset to 0 between captures
-        	printf("Timer Counter Overflow");
-          Difference = (htim->Init.Period - IC_Val1) + IC_Val2;
-        }
-        else
-        {
-          // This case should not happen, but reset if it does
-        	printf("Last Else");
-          Is_First_Captured = 0;
-          return;
-        }
-
-        // --- Calculate Frequency ---
-        // Get the timer's source clock frequency
-        // For TIM2 on H753, the source clock is APB1 Timer Clock
-        float timer_clock = (float)HAL_RCC_GetPCLK1Freq() * 2;
-
-        // The actual timer counter clock is the source clock divided by the prescaler
-        float counter_clock = timer_clock / (float)(htim->Init.Prescaler + 1);
-
-        // Frequency is the counter clock divided by the number of ticks in one period
-        Frequency = counter_clock / (float)Difference;
-
-        Is_First_Captured = 0; // Reset for the next measurement cycle
-      }
-    }
-  }
-}
-
-/**
   * @brief  Captures a frame from the camera using DCMI and DMA.
   * @retval None
   */
 static void capture_image(void)
 {
-  camImgReady = 0;
+  camImgReady = False;
 
   printf("Starting image capture...\r\n");
 
@@ -671,43 +534,26 @@ static void capture_image(void)
   }
 
   // Wait for frame ready
-  while (camImgReady == 0)
+  while (camImgReady == False)
   {
-//  	printf("DCMI state: %d\r\n", hdcmi.State);
-//  	printf("DMA error: 0x%08lx\r\n", HAL_DMA_GetError(hdcmi.DMA_Handle));
     HAL_Delay(1);
   }
 
   printf("✓ Frame captured into RAM\r\n");
 
   // Optional: Print a small portion of the data
+
+  /*
   for (int i = 0; i < 32; i++) {
     printf("%02X ", frame_buffer[i]);
   }
-  printf("\r\n");
-}
-
-void IT_FRAME(DCMI_HandleTypeDef *hdcmi)
-{
-	printf("Frame callback fired!\r\n");
-  camImgReady = 1;
-  HAL_DCMI_Stop(hdcmi);
-}
-
-void IT_LINE(DCMI_HandleTypeDef *hdcmi)
-{
-	printf("Line finished!!\r\n");
-}
-
-void IT_ERR(DCMI_HandleTypeDef *hdcmi)
-{
-	printf("Error detected in frame detection!!\r\n");
+  */
 }
 
 void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
 {
-	printf("HAL_DCMI_FrameEventCallback callback fired!\r\n");
-	camImgReady = 1;
+	printf("HAL_DCMI_FrameEventCallback fired!\r\n");
+	camImgReady = True;
 	HAL_DCMI_Stop(hdcmi);
 }
 
