@@ -64,11 +64,13 @@ void Error_Handler(void);
 #define Shutdown_GPIO_Port GPIOF
 #define Reset_Pin GPIO_PIN_1
 #define Reset_GPIO_Port GPIOF
+#define SD_CS_Pin GPIO_PIN_3
+#define SD_CS_GPIO_Port GPIOB
 #define LD2_Pin GPIO_PIN_1
 #define LD2_GPIO_Port GPIOE
 
 /* USER CODE BEGIN Private defines */
-
+#define SD_SPI_HANDLE hspi1
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

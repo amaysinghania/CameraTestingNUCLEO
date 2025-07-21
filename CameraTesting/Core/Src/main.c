@@ -18,10 +18,13 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "fatfs.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <ov5640.h>
+#include <stdio.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,6 +64,8 @@ DMA_HandleTypeDef hdma_dcmi;
 
 I2C_HandleTypeDef hi2c1;
 
+SPI_HandleTypeDef hspi1;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -75,11 +80,13 @@ volatile uint8_t camImgReady = 0;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void PeriphCommonClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_DCMI_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 // Camera I2C communication functions
 static int32_t OV5640_IO_Init(void);
@@ -91,6 +98,7 @@ static void Camera_IO_Init(void);
 static void Camera_Reset(void);
 static void Camera_PowerUp(void);
 static void capture_image(void);
+static void output_to_SD(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -156,7 +164,7 @@ void InitOV5640(void)
   if (ret == OV5640_OK) {
   	ret = OV5640_SetPCLK(&cam, OV5640_PCLK_24M);
   	if (ret == OV5640_OK) {
-			printf("✓ OV5640_Init successful (VGA, JPEG)\r\n");
+			printf("✓ OV5640_Init successful (VGA, RGB565)\r\n");
 			printf("✓ Camera is ready for image capture!\r\n");
 			BSP_LED_On(LED_GREEN);
   	} else {
@@ -194,6 +202,9 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
+  /* Configure the peripherals common clocks */
+  PeriphCommonClock_Config();
+
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
@@ -204,6 +215,8 @@ int main(void)
   MX_I2C1_Init();
   MX_DCMI_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -233,6 +246,8 @@ int main(void)
   OV5640_Start(&cam);
   printf("Taking Photo\r\n");
   capture_image();
+
+  output_to_SD();
 
   while (1)
   {
@@ -303,6 +318,24 @@ void SystemClock_Config(void)
     Error_Handler();
   }
   HAL_RCC_MCOConfig(RCC_MCO1, RCC_MCO1SOURCE_HSI48, RCC_MCODIV_2);
+}
+
+/**
+  * @brief Peripherals Common Clock Configuration
+  * @retval None
+  */
+void PeriphCommonClock_Config(void)
+{
+  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
+
+  /** Initializes the peripherals clock
+  */
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_CKPER;
+  PeriphClkInitStruct.CkperClockSelection = RCC_CLKPSOURCE_HSI;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /**
@@ -387,6 +420,54 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 0x0;
+  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  hspi1.Init.NSSPolarity = SPI_NSS_POLARITY_LOW;
+  hspi1.Init.FifoThreshold = SPI_FIFO_THRESHOLD_01DATA;
+  hspi1.Init.TxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
+  hspi1.Init.RxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
+  hspi1.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
+  hspi1.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
+  hspi1.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
+  hspi1.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
+  hspi1.Init.IOSwap = SPI_IO_SWAP_DISABLE;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
 
 }
 
@@ -480,6 +561,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOF, Shutdown_Pin|Reset_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : Shutdown_Pin */
@@ -503,6 +587,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
   GPIO_InitStruct.Alternate = GPIO_AF0_MCO;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : SD_CS_Pin */
+  GPIO_InitStruct.Pin = SD_CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(SD_CS_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD2_Pin */
   GPIO_InitStruct.Pin = LD2_Pin;
@@ -543,11 +634,77 @@ static void capture_image(void)
 
   // Optional: Print a small portion of the data
 
-  /*
-  for (int i = 0; i < 32; i++) {
-    printf("%02X ", frame_buffer[i]);
-  }
-  */
+
+//  for (int i = 0; i < 32; i++) {
+//    printf("%02X ", frame_buffer[i]);
+//  }
+
+}
+
+static void output_to_SD(void){
+	printf("\r\n=== Interfacing with SD Card ===\r\n\r\n");
+
+	HAL_Delay(1000); //a short delay is important to let the SD card settle
+
+	//some variables for FatFs
+	FATFS FatFs; 	//Fatfs handle
+	FIL fil; 		//File handle
+	FRESULT fres; //Result after operations
+
+	//Open the file system
+	fres = f_mount(&FatFs, "", 1); //1=mount now
+	if (fres != FR_OK) {
+	printf("f_mount error (%i)\r\n", fres);
+	while(1);
+	}
+
+	//Let's get some statistics from the SD card
+	DWORD free_clusters, free_sectors, total_sectors;
+
+	FATFS* getFreeFs;
+
+	fres = f_getfree("", &free_clusters, &getFreeFs);
+	if (fres != FR_OK) {
+		printf("f_getfree error (%i)\r\n", fres);
+		while(1);
+	}
+
+	//Formula comes from ChaN's documentation
+	total_sectors = ((getFreeFs->n_fatent - 2) * getFreeFs->csize) / 2 / 1000000;
+	free_sectors = (free_clusters * getFreeFs->csize) / 2 / 1000000;
+
+	printf("SD card stats:\r\n%10lu GB total drive space.\r\n%10lu GB available.\r\n", total_sectors, free_sectors);
+
+	//Now let's try and write a file "write.txt"
+	fres = f_open(&fil, "frame.txt", FA_WRITE | FA_OPEN_ALWAYS | FA_CREATE_ALWAYS);
+	if(fres == FR_OK) {
+		printf("I was able to open 'frame.txt' for writing\r\n");
+	} else {
+		printf("f_open error (%i)\r\n", fres);
+	}
+
+	UINT bytesWrote;
+	fres = f_write(&fil, frame_buffer, FRAME_BUFFER_SIZE, &bytesWrote);
+	if(fres == FR_OK) {
+		printf("Wrote %i bytes to 'frame.txt'!\r\n", bytesWrote);
+	} else {
+		printf("f_write error (%i)\r\n", fres);
+	}
+
+	//Be a tidy kiwi - don't forget to close your file!
+	fres = f_close(&fil);
+	if(fres == FR_OK) {
+		printf("I was able to close 'frame.txt'\r\n");
+	} else {
+		printf("f_close error (%i)\r\n", fres);
+	}
+
+	//We're done, so de-mount the drive
+	f_mount(NULL, "", 0);
+	if (fres != FR_OK) {
+		printf("f_mount error in un-mounting (%i)\r\n", fres);
+		while(1);
+	}
 }
 
 void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
