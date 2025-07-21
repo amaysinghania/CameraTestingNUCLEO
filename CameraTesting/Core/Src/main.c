@@ -99,6 +99,7 @@ static void Camera_Reset(void);
 static void Camera_PowerUp(void);
 static void capture_image(void);
 static void output_to_SD(void);
+static void debug_sd_card(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -246,6 +247,9 @@ int main(void)
   OV5640_Start(&cam);
   printf("Taking Photo\r\n");
   capture_image();
+
+  // Run SD card debug test first
+  debug_sd_card();
 
   output_to_SD();
 
@@ -639,6 +643,231 @@ static void capture_image(void)
 //    printf("%02X ", frame_buffer[i]);
 //  }
 
+}
+
+/**
+  * @brief  Comprehensive SD card debug function to test all aspects of SD functionality
+  * @retval None
+  */
+static void debug_sd_card(void)
+{
+  printf("\r\n=== SD CARD COMPREHENSIVE DEBUG TEST ===\r\n");
+  
+  // Variables for FATFS operations
+  FATFS fs;
+  FIL fil;
+  FRESULT fres;
+  DSTATUS disk_status;
+  DRESULT disk_result;
+  
+  // Test data
+  char test_data[] = "SD Card Test - Hello World!\r\nThis is a test file.\r\n";
+  char read_buffer[100];
+  UINT bytes_written, bytes_read;
+  
+  printf("Step 1: Testing Low-Level Disk Operations\r\n");
+  printf("=========================================\r\n");
+  
+  // Test disk initialization
+  printf("Testing disk_initialize(0)...\r\n");
+  disk_status = disk_initialize(0);
+  printf("disk_initialize() returned: 0x%02X\r\n", disk_status);
+  if (disk_status == 0) {
+    printf("✓ Disk initialization successful\r\n");
+  } else {
+    printf("✗ Disk initialization failed\r\n");
+    printf("  STA_NOINIT (0x01): %s\r\n", (disk_status & STA_NOINIT) ? "SET" : "CLEAR");
+    printf("  STA_NODISK (0x02): %s\r\n", (disk_status & STA_NODISK) ? "SET" : "CLEAR");
+    printf("  STA_PROTECT (0x04): %s\r\n", (disk_status & STA_PROTECT) ? "SET" : "CLEAR");
+  }
+  
+  // Test disk status
+  printf("\nTesting disk_status(0)...\r\n");
+  DSTATUS current_status = disk_status(0);
+  printf("disk_status() returned: 0x%02X\r\n", current_status);
+  
+  // Test reading sector 0 (MBR/Boot sector)
+  printf("\nTesting disk_read() - Reading sector 0...\r\n");
+  uint8_t sector_buffer[512];
+  disk_result = disk_read(0, sector_buffer, 0, 1);
+  printf("disk_read() returned: %d\r\n", disk_result);
+  if (disk_result == RES_OK) {
+    printf("✓ Sector 0 read successful\r\n");
+    printf("First 16 bytes of sector 0: ");
+    for (int i = 0; i < 16; i++) {
+      printf("%02X ", sector_buffer[i]);
+    }
+    printf("\r\n");
+    
+    // Check for common boot sector signatures
+    if (sector_buffer[510] == 0x55 && sector_buffer[511] == 0xAA) {
+      printf("✓ Valid boot sector signature found (0x55AA)\r\n");
+    } else {
+      printf("⚠ Boot sector signature not found at bytes 510-511\r\n");
+    }
+  } else {
+    printf("✗ Sector 0 read failed\r\n");
+  }
+  
+  printf("\r\nStep 2: Testing FATFS Mount Operations\r\n");
+  printf("=====================================\r\n");
+  
+  // Test mounting with different options
+  for (int mount_opt = 0; mount_opt <= 1; mount_opt++) {
+    printf("Testing f_mount() with opt=%d...\r\n", mount_opt);
+    fres = f_mount(&fs, "", mount_opt);
+    printf("f_mount(opt=%d) returned: %d ", mount_opt, fres);
+    
+    switch(fres) {
+      case FR_OK:
+        printf("(FR_OK - Success)\r\n");
+        break;
+      case FR_DISK_ERR:
+        printf("(FR_DISK_ERR - Low level disk I/O error)\r\n");
+        break;
+      case FR_INT_ERR:
+        printf("(FR_INT_ERR - Assertion failed)\r\n");
+        break;
+      case FR_NOT_READY:
+        printf("(FR_NOT_READY - Physical drive cannot work)\r\n");
+        break;
+      case FR_NO_FILESYSTEM:
+        printf("(FR_NO_FILESYSTEM - No valid FAT volume)\r\n");
+        break;
+      case FR_INVALID_DRIVE:
+        printf("(FR_INVALID_DRIVE - Invalid logical drive number)\r\n");
+        break;
+      case FR_NOT_ENABLED:
+        printf("(FR_NOT_ENABLED - Volume has no work area)\r\n");
+        break;
+      default:
+        printf("(Unknown error)\r\n");
+        break;
+    }
+    
+    if (fres == FR_OK) {
+      printf("✓ Mount successful with opt=%d\r\n", mount_opt);
+      
+      // Test f_getfree to get filesystem info
+      printf("Testing f_getfree()...\r\n");
+      DWORD free_clusters, free_sectors, total_sectors;
+      FATFS* get_free_fs;
+      
+      fres = f_getfree("", &free_clusters, &get_free_fs);
+      if (fres == FR_OK) {
+        total_sectors = (get_free_fs->n_fatent - 2) * get_free_fs->csize;
+        free_sectors = free_clusters * get_free_fs->csize;
+        printf("✓ Filesystem info retrieved:\r\n");
+        printf("  Total sectors: %lu\r\n", total_sectors);
+        printf("  Free sectors: %lu\r\n", free_sectors);
+        printf("  Sector size: %u bytes\r\n", get_free_fs->ssize);
+        printf("  Cluster size: %u sectors\r\n", get_free_fs->csize);
+      } else {
+        printf("✗ f_getfree() failed: %d\r\n", fres);
+      }
+      
+      break; // Exit loop on successful mount
+    } else {
+      printf("✗ Mount failed with opt=%d\r\n", mount_opt);
+      HAL_Delay(100); // Small delay between attempts
+    }
+  }
+  
+  if (fres != FR_OK) {
+    printf("\r\n⚠ Cannot proceed with file operations - mount failed\r\n");
+    printf("=== DEBUGGING TIPS ===\r\n");
+    printf("1. Check SD card is properly inserted\r\n");
+    printf("2. Verify SD card is formatted (FAT16/FAT32)\r\n");
+    printf("3. Check SPI wiring (MISO, MOSI, SCK, CS)\r\n");
+    printf("4. Verify SPI clock speed (should start slow)\r\n");
+    printf("5. Check CS pin is correctly configured\r\n");
+    printf("=== END DEBUG TEST ===\r\n\r\n");
+    return;
+  }
+  
+  printf("\r\nStep 3: Testing File Operations\r\n");
+  printf("==============================\r\n");
+  
+  // Test file creation and writing
+  printf("Testing f_open() for write...\r\n");
+  fres = f_open(&fil, "debug_test.txt", FA_CREATE_ALWAYS | FA_WRITE);
+  printf("f_open() returned: %d ", fres);
+  
+  switch(fres) {
+    case FR_OK:
+      printf("(FR_OK - Success)\r\n");
+      break;
+    case FR_DISK_ERR:
+      printf("(FR_DISK_ERR - Low level disk I/O error)\r\n");
+      break;
+    case FR_DENIED:
+      printf("(FR_DENIED - Access denied)\r\n");
+      break;
+    case FR_WRITE_PROTECTED:
+      printf("(FR_WRITE_PROTECTED - Write protected)\r\n");
+      break;
+    default:
+      printf("(Error code: %d)\r\n", fres);
+      break;
+  }
+  
+  if (fres == FR_OK) {
+    printf("✓ File opened for writing\r\n");
+    
+    // Test writing
+    printf("Testing f_write()...\r\n");
+    fres = f_write(&fil, test_data, strlen(test_data), &bytes_written);
+    printf("f_write() returned: %d, bytes written: %u\r\n", fres, bytes_written);
+    
+    if (fres == FR_OK && bytes_written == strlen(test_data)) {
+      printf("✓ Write successful\r\n");
+    } else {
+      printf("✗ Write failed or incomplete\r\n");
+    }
+    
+    // Close file
+    printf("Testing f_close()...\r\n");
+    fres = f_close(&fil);
+    if (fres == FR_OK) {
+      printf("✓ File closed successfully\r\n");
+    } else {
+      printf("✗ f_close() failed: %d\r\n", fres);
+    }
+  } else {
+    printf("✗ Cannot open file for writing\r\n");
+  }
+  
+  // Test file reading
+  printf("\nTesting f_open() for read...\r\n");
+  fres = f_open(&fil, "debug_test.txt", FA_READ);
+  if (fres == FR_OK) {
+    printf("✓ File opened for reading\r\n");
+    
+    printf("Testing f_read()...\r\n");
+    memset(read_buffer, 0, sizeof(read_buffer));
+    fres = f_read(&fil, read_buffer, sizeof(read_buffer)-1, &bytes_read);
+    if (fres == FR_OK) {
+      printf("✓ Read successful, bytes read: %u\r\n", bytes_read);
+      printf("Read data: %s\r\n", read_buffer);
+    } else {
+      printf("✗ f_read() failed: %d\r\n", fres);
+    }
+    
+    f_close(&fil);
+  } else {
+    printf("✗ Cannot open file for reading: %d\r\n", fres);
+  }
+  
+  // Unmount
+  printf("\nTesting f_mount(NULL) - unmount...\r\n");
+  fres = f_mount(NULL, "", 0);
+  if (fres == FR_OK) {
+    printf("✓ Filesystem unmounted successfully\r\n");
+  } else {
+    printf("✗ Unmount failed: %d\r\n", fres);
+  }
+  
+  printf("\r\n=== SD CARD DEBUG TEST COMPLETE ===\r\n\r\n");
 }
 
 static void output_to_SD(void){
