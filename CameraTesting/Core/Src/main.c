@@ -76,6 +76,10 @@ uint32_t camera_id;
 
 uint8_t frame_buffer[FRAME_BUFFER_SIZE] __attribute__((section(".sram1")));
 volatile uint8_t camImgReady = 0;
+
+FATFS FatFs; 	//Fatfs handle
+FIL fil; 		//File handle
+FRESULT fres; //Result after operations
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -654,10 +658,7 @@ static void debug_sd_card(void)
   printf("\r\n=== SD CARD COMPREHENSIVE DEBUG TEST ===\r\n");
   
   // Variables for FATFS operations
-  FATFS fs;
-  FIL fil;
-  FRESULT fres;
-  DSTATUS disk_status;
+  DSTATUS disk_status_out;
   DRESULT disk_result;
   
   // Test data
@@ -670,15 +671,15 @@ static void debug_sd_card(void)
   
   // Test disk initialization
   printf("Testing disk_initialize(0)...\r\n");
-  disk_status = disk_initialize(0);
-  printf("disk_initialize() returned: 0x%02X\r\n", disk_status);
-  if (disk_status == 0) {
+  disk_status_out = disk_initialize(0);
+  printf("disk_initialize() returned: 0x%02X\r\n", disk_status_out);
+  if (disk_status_out == 0) {
     printf("✓ Disk initialization successful\r\n");
   } else {
     printf("✗ Disk initialization failed\r\n");
-    printf("  STA_NOINIT (0x01): %s\r\n", (disk_status & STA_NOINIT) ? "SET" : "CLEAR");
-    printf("  STA_NODISK (0x02): %s\r\n", (disk_status & STA_NODISK) ? "SET" : "CLEAR");
-    printf("  STA_PROTECT (0x04): %s\r\n", (disk_status & STA_PROTECT) ? "SET" : "CLEAR");
+    printf("  STA_NOINIT (0x01): %s\r\n", (disk_status_out & STA_NOINIT) ? "SET" : "CLEAR");
+    printf("  STA_NODISK (0x02): %s\r\n", (disk_status_out & STA_NODISK) ? "SET" : "CLEAR");
+    printf("  STA_PROTECT (0x04): %s\r\n", (disk_status_out & STA_PROTECT) ? "SET" : "CLEAR");
   }
   
   // Test disk status
@@ -715,7 +716,7 @@ static void debug_sd_card(void)
   // Test mounting with different options
   for (int mount_opt = 0; mount_opt <= 1; mount_opt++) {
     printf("Testing f_mount() with opt=%d...\r\n", mount_opt);
-    fres = f_mount(&fs, "", mount_opt);
+    fres = f_mount(&FatFs, "", mount_opt);
     printf("f_mount(opt=%d) returned: %d ", mount_opt, fres);
     
     switch(fres) {
@@ -760,7 +761,7 @@ static void debug_sd_card(void)
         printf("✓ Filesystem info retrieved:\r\n");
         printf("  Total sectors: %lu\r\n", total_sectors);
         printf("  Free sectors: %lu\r\n", free_sectors);
-        printf("  Sector size: %u bytes\r\n", get_free_fs->ssize);
+//        printf("  Sector size: %u bytes\r\n", get_free_fs->ssize);
         printf("  Cluster size: %u sectors\r\n", get_free_fs->csize);
       } else {
         printf("✗ f_getfree() failed: %d\r\n", fres);
@@ -790,7 +791,7 @@ static void debug_sd_card(void)
   
   // Test file creation and writing
   printf("Testing f_open() for write...\r\n");
-  fres = f_open(&fil, "debug_test.txt", FA_CREATE_ALWAYS | FA_WRITE);
+  fres = f_open(&fil, "debug.txt", FA_CREATE_ALWAYS | FA_WRITE);
   printf("f_open() returned: %d ", fres);
   
   switch(fres) {
@@ -839,7 +840,7 @@ static void debug_sd_card(void)
   
   // Test file reading
   printf("\nTesting f_open() for read...\r\n");
-  fres = f_open(&fil, "debug_test.txt", FA_READ);
+  fres = f_open(&fil, "debug.txt", FA_READ);
   if (fres == FR_OK) {
     printf("✓ File opened for reading\r\n");
     
@@ -874,11 +875,6 @@ static void output_to_SD(void){
 	printf("\r\n=== Interfacing with SD Card ===\r\n\r\n");
 
 	HAL_Delay(1000); //a short delay is important to let the SD card settle
-
-	//some variables for FatFs
-	FATFS FatFs; 	//Fatfs handle
-	FIL fil; 		//File handle
-	FRESULT fres; //Result after operations
 
 	//Open the file system
 	fres = f_mount(&FatFs, "", 1); //1=mount now
