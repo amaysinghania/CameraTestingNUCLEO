@@ -881,6 +881,8 @@ static void output_to_SD(void){
 	if (fres != FR_OK) {
 	printf("f_mount error (%i)\r\n", fres);
 	while(1);
+	} else {
+		printf("Mounted successfully\r\n");
 	}
 
 	//Let's get some statistics from the SD card
@@ -925,10 +927,12 @@ static void output_to_SD(void){
 	}
 
 	//We're done, so de-mount the drive
-	f_mount(NULL, "", 0);
+	fres = f_mount(NULL, "", 0);
 	if (fres != FR_OK) {
 		printf("f_mount error in un-mounting (%i)\r\n", fres);
 		while(1);
+	} else {
+		printf("Unmounted successfully  (%i)\r\n", fres);
 	}
 }
 
