@@ -20,8 +20,6 @@
 
 #include "ff.h"			/* Declarations of FatFs API */
 #include "diskio.h"		/* Declarations of device I/O functions */
-#include <stdio.h>
-
 
 
 /*--------------------------------------------------------------------------
@@ -3617,22 +3615,17 @@ FRESULT f_write (
 	UINT* bw			/* Pointer to number of bytes written */
 )
 {
-	printf("f_write called\r\n");
-
 	FRESULT res;
 	FATFS *fs;
 	DWORD clst, sect;
 	UINT wcnt, cc, csect;
 	const BYTE *wbuff = (const BYTE*)buff;
 
-	printf("In f_write function (%i)\r\n", btw);
-
 
 	*bw = 0;	/* Clear write byte counter */
 	res = validate(&fp->obj, &fs);			/* Check validity of the file object */
 	if (res != FR_OK || (res = (FRESULT)fp->err) != FR_OK) LEAVE_FF(fs, res);	/* Check validity */
 	if (!(fp->flag & FA_WRITE)) LEAVE_FF(fs, FR_DENIED);	/* Check access mode */
-
 
 	/* Check fptr wrap-around (file size cannot reach 4GiB on FATxx) */
 	if ((!_FS_EXFAT || fs->fs_type != FS_EXFAT) && (DWORD)(fp->fptr + btw) < (DWORD)fp->fptr) {
@@ -3641,16 +3634,13 @@ FRESULT f_write (
 
 	for ( ;  btw;							/* Repeat until all data written */
 		wbuff += wcnt, fp->fptr += wcnt, fp->obj.objsize = (fp->fptr > fp->obj.objsize) ? fp->fptr : fp->obj.objsize, *bw += wcnt, btw -= wcnt) {
-		printf("f_write: loop start, btw=%u\r\n", btw);
 		if (fp->fptr % SS(fs) == 0) {		/* On the sector boundary? */
 			csect = (UINT)(fp->fptr / SS(fs)) & (fs->csize - 1);	/* Sector offset in the cluster */
-			if (csect == 0) {                /* On the cluster boundary? */
-                printf("f_write: on cluster boundary\r\n");
+			if (csect == 0) {				/* On the cluster boundary? */
 				if (fp->fptr == 0) {		/* On the top of the file? */
 					clst = fp->obj.sclust;	/* Follow from the origin */
 					if (clst == 0) {		/* If no cluster is allocated, */
 						clst = create_chain(&fp->obj, 0);	/* create a new cluster chain */
-						printf("f_write: created new cluster chain, clst=%lu\r\n", clst);
 					}
 				} else {					/* On the middle or end of the file */
 #if _USE_FASTSEEK
@@ -3679,14 +3669,10 @@ FRESULT f_write (
 			sect = clust2sect(fs, fp->clust);	/* Get current sector */
 			if (!sect) ABORT(fs, FR_INT_ERR);
 			sect += csect;
-			printf("f_write: current sector=%lu\r\n", sect);
 			cc = btw / SS(fs);				/* When remaining bytes >= sector size, */
-			printf("f_write: writing %u contiguous sectors\r\n", cc);
 			if (cc) {						/* Write maximum contiguous sectors directly */
-				printf("f_write: writing %u contiguous sectors\r\n", cc);
 				if (csect + cc > fs->csize) {	/* Clip at cluster boundary */
 					cc = fs->csize - csect;
-					printf("f_write: clipped to %u sectors at cluster boundary\r\n", cc);
 				}
 				if (disk_write(fs->drv, wbuff, sect, cc) != RES_OK) ABORT(fs, FR_DISK_ERR);
 #if _FS_MINIMIZE <= 2
@@ -3702,8 +3688,7 @@ FRESULT f_write (
 				}
 #endif
 #endif
-				wcnt = SS(fs) * cc; /* Number of bytes transferred */
-				printf("f_write: transferred %u bytes\r\n", wcnt);
+				wcnt = SS(fs) * cc;		/* Number of bytes transferred */
 				continue;
 			}
 #if _FS_TINY
@@ -3734,7 +3719,6 @@ FRESULT f_write (
 
 	fp->flag |= FA_MODIFIED;				/* Set file change flag */
 
-	printf("f_write: finished\r\n");
 	LEAVE_FF(fs, FR_OK);
 }
 

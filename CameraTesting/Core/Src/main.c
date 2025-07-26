@@ -59,12 +59,7 @@
 
 COM_InitTypeDef BspCOMInit;
 
-DCMI_HandleTypeDef hdcmi;
-DMA_HandleTypeDef hdma_dcmi;
-
-I2C_HandleTypeDef hi2c1;
-
-SPI_HandleTypeDef hspi1;
+SD_HandleTypeDef hsd1;
 
 UART_HandleTypeDef huart2;
 
@@ -73,6 +68,7 @@ OV5640_Object_t cam;
 OV5640_IO_t io;
 int32_t ret;
 uint32_t camera_id;
+char TxBuffer[250];
 
 uint8_t frame_buffer[FRAME_BUFFER_SIZE] __attribute__((section(".sram1")));
 volatile uint8_t camImgReady = 0;
@@ -84,13 +80,9 @@ FRESULT fres; //Result after operations
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void PeriphCommonClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
-static void MX_I2C1_Init(void);
-static void MX_DCMI_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_SPI1_Init(void);
+static void MX_SDMMC1_SD_Init(void);
 /* USER CODE BEGIN PFP */
 // Camera I2C communication functions
 static int32_t OV5640_IO_Init(void);
@@ -104,6 +96,7 @@ static void Camera_PowerUp(void);
 static void capture_image(void);
 static void output_to_SD(void);
 static void debug_sd_card(void);
+static void debug_sd_hardware(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -207,20 +200,26 @@ int main(void)
   /* Configure the system clock */
   SystemClock_Config();
 
-  /* Configure the peripherals common clocks */
-  PeriphCommonClock_Config();
-
   /* USER CODE BEGIN SysInit */
 
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
-  MX_I2C1_Init();
-  MX_DCMI_Init();
   MX_USART2_UART_Init();
-  MX_SPI1_Init();
+  MX_SDMMC1_SD_Init();
+  
+  // Initialize SD card hardware before FatFS
+  printf("Initializing SD card hardware...\r\n");
+  if (HAL_SD_Init(&hsd1) != HAL_OK) {
+    printf("✗ HAL_SD_Init failed!\r\n");
+    Error_Handler();
+  }
+  printf("✓ HAL_SD_Init successful\r\n");
+  
+  // Give SD card time to settle
+  HAL_Delay(100);
+  
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
@@ -255,6 +254,13 @@ int main(void)
 //  // Run SD card debug test first
 //  debug_sd_card();
 
+  // Debug SD card hardware first
+  debug_sd_hardware();
+  
+  // Then run comprehensive debug
+  debug_sd_card();
+  
+  // Finally try normal operation
   output_to_SD();
 
   while (1)
@@ -329,153 +335,29 @@ void SystemClock_Config(void)
 }
 
 /**
-  * @brief Peripherals Common Clock Configuration
-  * @retval None
-  */
-void PeriphCommonClock_Config(void)
-{
-  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
-
-  /** Initializes the peripherals clock
-  */
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_CKPER;
-  PeriphClkInitStruct.CkperClockSelection = RCC_CLKPSOURCE_HSI;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
-}
-
-/**
-  * @brief DCMI Initialization Function
+  * @brief SDMMC1 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_DCMI_Init(void)
+static void MX_SDMMC1_SD_Init(void)
 {
 
-  /* USER CODE BEGIN DCMI_Init 0 */
+  /* USER CODE BEGIN SDMMC1_Init 0 */
 
-  /* USER CODE END DCMI_Init 0 */
+  /* USER CODE END SDMMC1_Init 0 */
 
-  /* USER CODE BEGIN DCMI_Init 1 */
+  /* USER CODE BEGIN SDMMC1_Init 1 */
 
-  /* USER CODE END DCMI_Init 1 */
-  hdcmi.Instance = DCMI;
-  hdcmi.Init.SynchroMode = DCMI_SYNCHRO_HARDWARE;
-  hdcmi.Init.PCKPolarity = DCMI_PCKPOLARITY_RISING;
-  hdcmi.Init.VSPolarity = DCMI_VSPOLARITY_HIGH;
-  hdcmi.Init.HSPolarity = DCMI_HSPOLARITY_HIGH;
-  hdcmi.Init.CaptureRate = DCMI_CR_ALL_FRAME;
-  hdcmi.Init.ExtendedDataMode = DCMI_EXTEND_DATA_8B;
-  hdcmi.Init.JPEGMode = DCMI_JPEG_ENABLE;
-  hdcmi.Init.ByteSelectMode = DCMI_BSM_ALL;
-  hdcmi.Init.ByteSelectStart = DCMI_OEBS_ODD;
-  hdcmi.Init.LineSelectMode = DCMI_LSM_ALL;
-  hdcmi.Init.LineSelectStart = DCMI_OELS_ODD;
-  if (HAL_DCMI_Init(&hdcmi) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN DCMI_Init 2 */
+  /* USER CODE END SDMMC1_Init 1 */
+  hsd1.Instance = SDMMC1;
+  hsd1.Init.ClockEdge = SDMMC_CLOCK_EDGE_FALLING;
+  hsd1.Init.ClockPowerSave = SDMMC_CLOCK_POWER_SAVE_DISABLE;
+  hsd1.Init.BusWide = SDMMC_BUS_WIDE_1B;  // Start with 1-bit mode
+  hsd1.Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_ENABLE;
+  hsd1.Init.ClockDiv = 178;  // Start with ~200kHz for initialization
+  /* USER CODE BEGIN SDMMC1_Init 2 */
 
-  /* USER CODE END DCMI_Init 2 */
-
-}
-
-/**
-  * @brief I2C1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_I2C1_Init(void)
-{
-
-  /* USER CODE BEGIN I2C1_Init 0 */
-
-  /* USER CODE END I2C1_Init 0 */
-
-  /* USER CODE BEGIN I2C1_Init 1 */
-
-  /* USER CODE END I2C1_Init 1 */
-  hi2c1.Instance = I2C1;
-  hi2c1.Init.Timing = 0x10707DBC;
-  hi2c1.Init.OwnAddress1 = 0;
-  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
-  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-  hi2c1.Init.OwnAddress2 = 0;
-  hi2c1.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
-  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
-  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
-  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Analogue filter
-  */
-  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c1, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-  /** Configure Digital filter
-  */
-  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c1, 0) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN I2C1_Init 2 */
-
-  /* USER CODE END I2C1_Init 2 */
-
-}
-
-/**
-  * @brief SPI1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_SPI1_Init(void)
-{
-
-  /* USER CODE BEGIN SPI1_Init 0 */
-
-  /* USER CODE END SPI1_Init 0 */
-
-  /* USER CODE BEGIN SPI1_Init 1 */
-
-  /* USER CODE END SPI1_Init 1 */
-  /* SPI1 parameter configuration*/
-  hspi1.Instance = SPI1;
-  hspi1.Init.Mode = SPI_MODE_MASTER;
-  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
-  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
-  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
-  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
-  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
-  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
-  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
-  hspi1.Init.CRCPolynomial = 0x0;
-  hspi1.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
-  hspi1.Init.NSSPolarity = SPI_NSS_POLARITY_LOW;
-  hspi1.Init.FifoThreshold = SPI_FIFO_THRESHOLD_01DATA;
-  hspi1.Init.TxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
-  hspi1.Init.RxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
-  hspi1.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
-  hspi1.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
-  hspi1.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
-  hspi1.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
-  hspi1.Init.IOSwap = SPI_IO_SWAP_DISABLE;
-  if (HAL_SPI_Init(&hspi1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN SPI1_Init 2 */
-
-  /* USER CODE END SPI1_Init 2 */
+  /* USER CODE END SDMMC1_Init 2 */
 
 }
 
@@ -528,22 +410,6 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
-
-}
-
-/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -556,14 +422,13 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOF_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
-  __HAL_RCC_GPIOG_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOF, Shutdown_Pin|Reset_Pin, GPIO_PIN_RESET);
@@ -602,6 +467,22 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(SD_CS_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF5_SPI1;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB8 */
+  GPIO_InitStruct.Pin = GPIO_PIN_8;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /*Configure GPIO pin : LD2_Pin */
   GPIO_InitStruct.Pin = LD2_Pin;
@@ -871,69 +752,247 @@ static void debug_sd_card(void)
   printf("\r\n=== SD CARD DEBUG TEST COMPLETE ===\r\n\r\n");
 }
 
-static void output_to_SD(void){
-	printf("\r\n=== Interfacing with SD Card ===\r\n\r\n");
+/**
+  * @brief  Debug SD card hardware and low-level functionality
+  * @retval None
+  */
+static void debug_sd_hardware(void)
+{
+  printf("\r\n=== SD CARD HARDWARE DEBUG ===\r\n");
+  
+  HAL_SD_CardInfoTypeDef cardInfo;
+  HAL_SD_CardStateTypeDef cardState;
+  
+  // Check SD card state
+  printf("Step 1: Hardware State Check\r\n");
+  printf("============================\r\n");
+  
+  cardState = HAL_SD_GetCardState(&hsd1);
+  printf("HAL_SD_GetCardState(): %d ", cardState);
+  switch(cardState) {
+    case HAL_SD_CARD_READY:
+      printf("(HAL_SD_CARD_READY)\r\n");
+      break;
+    case HAL_SD_CARD_IDENTIFICATION:
+      printf("(HAL_SD_CARD_IDENTIFICATION)\r\n");
+      break;
+    case HAL_SD_CARD_STANDBY:
+      printf("(HAL_SD_CARD_STANDBY)\r\n");
+      break;
+    case HAL_SD_CARD_TRANSFER:
+      printf("(HAL_SD_CARD_TRANSFER)\r\n");
+      break;
+    case HAL_SD_CARD_SENDING:
+      printf("(HAL_SD_CARD_SENDING)\r\n");
+      break;
+    case HAL_SD_CARD_RECEIVING:
+      printf("(HAL_SD_CARD_RECEIVING)\r\n");
+      break;
+    case HAL_SD_CARD_PROGRAMMING:
+      printf("(HAL_SD_CARD_PROGRAMMING)\r\n");
+      break;
+    case HAL_SD_CARD_DISCONNECTED:
+      printf("(HAL_SD_CARD_DISCONNECTED)\r\n");
+      break;
+    case HAL_SD_CARD_ERROR:
+      printf("(HAL_SD_CARD_ERROR)\r\n");
+      break;
+    default:
+      printf("(UNKNOWN)\r\n");
+      break;
+  }
+  
+  // Get card information
+  printf("\nStep 2: Card Information\r\n");
+  printf("========================\r\n");
+  
+  if (HAL_SD_GetCardInfo(&hsd1, &cardInfo) == HAL_OK) {
+    printf("✓ Card Info Retrieved:\r\n");
+    printf("  Card Type: %lu\r\n", cardInfo.CardType);
+    printf("  Card Version: %lu\r\n", cardInfo.CardVersion);
+    printf("  Class: %lu\r\n", cardInfo.Class);
+    printf("  Relative Card Address: 0x%lX\r\n", cardInfo.RelCardAdd);
+    printf("  Block Number: %lu\r\n", cardInfo.BlockNbr);
+    printf("  Block Size: %lu bytes\r\n", cardInfo.BlockSize);
+    printf("  Logical Block Number: %lu\r\n", cardInfo.LogBlockNbr);
+    printf("  Logical Block Size: %lu bytes\r\n", cardInfo.LogBlockSize);
+    
+    // Calculate card capacity
+    uint64_t cardCapacity = (uint64_t)cardInfo.LogBlockNbr * cardInfo.LogBlockSize;
+    printf("  Card Capacity: %llu bytes (%.2f MB)\r\n", 
+           cardCapacity, (float)cardCapacity / (1024.0f * 1024.0f));
+  } else {
+    printf("✗ Failed to get card information\r\n");
+  }
+  
+  // Test BSP functions
+  printf("\nStep 3: BSP Function Tests\r\n");
+  printf("==========================\r\n");
+  
+  printf("BSP_SD_IsDetected(): ");
+  if (BSP_SD_IsDetected() == SD_PRESENT) {
+    printf("SD_PRESENT\r\n");
+  } else {
+    printf("SD_NOT_PRESENT\r\n");
+  }
+  
+  printf("BSP_SD_GetCardState(): ");
+  uint8_t bspState = BSP_SD_GetCardState();
+  if (bspState == SD_TRANSFER_OK) {
+    printf("SD_TRANSFER_OK\r\n");
+  } else {
+    printf("SD_TRANSFER_BUSY\r\n");
+  }
+  
+  // Test basic read operation
+  printf("\nStep 4: Basic Read Test\r\n");
+  printf("=======================\r\n");
+  
+  uint8_t testBuffer[512];
+  printf("Testing HAL_SD_ReadBlocks() on sector 0...\r\n");
+  HAL_StatusTypeDef readResult = HAL_SD_ReadBlocks(&hsd1, testBuffer, 0, 1, 5000);
+  
+  if (readResult == HAL_OK) {
+    printf("✓ Sector 0 read successful\r\n");
+    printf("First 16 bytes: ");
+    for (int i = 0; i < 16; i++) {
+      printf("%02X ", testBuffer[i]);
+    }
+    printf("\r\n");
+    
+    // Check boot sector signature
+    if (testBuffer[510] == 0x55 && testBuffer[511] == 0xAA) {
+      printf("✓ Valid boot sector signature (0x55AA)\r\n");
+    } else {
+      printf("⚠ Boot sector signature missing\r\n");
+    }
+  } else {
+    printf("✗ Sector 0 read failed: HAL_StatusTypeDef = %d\r\n", readResult);
+    
+    // Get error information
+    uint32_t errorState = HAL_SD_GetError(&hsd1);
+    printf("HAL_SD_GetError(): 0x%08lX\r\n", errorState);
+    
+    if (errorState & HAL_SD_ERROR_CMD_CRC_FAIL) printf("  - CMD_CRC_FAIL\r\n");
+    if (errorState & HAL_SD_ERROR_DATA_CRC_FAIL) printf("  - DATA_CRC_FAIL\r\n");
+    if (errorState & HAL_SD_ERROR_CMD_RSP_TIMEOUT) printf("  - CMD_RSP_TIMEOUT\r\n");
+    if (errorState & HAL_SD_ERROR_DATA_TIMEOUT) printf("  - DATA_TIMEOUT\r\n");
+    if (errorState & HAL_SD_ERROR_TX_UNDERRUN) printf("  - TX_UNDERRUN\r\n");
+    if (errorState & HAL_SD_ERROR_RX_OVERRUN) printf("  - RX_OVERRUN\r\n");
+  }
+  
+  printf("\r\n=== HARDWARE DEBUG COMPLETE ===\r\n\r\n");
+}
 
-	HAL_Delay(1000); //a short delay is important to let the SD card settle
-
-	//Open the file system
-	fres = f_mount(&FatFs, "", 1); //1=mount now
-	if (fres != FR_OK) {
-	printf("f_mount error (%i)\r\n", fres);
-	while(1);
-	} else {
-		printf("Mounted successfully\r\n");
-	}
-
-	//Let's get some statistics from the SD card
-	DWORD free_clusters, free_sectors, total_sectors;
-
-	FATFS* getFreeFs;
-
-	fres = f_getfree("", &free_clusters, &getFreeFs);
-	if (fres != FR_OK) {
-		printf("f_getfree error (%i)\r\n", fres);
-		while(1);
-	}
-
-	//Formula comes from ChaN's documentation
-	total_sectors = ((getFreeFs->n_fatent - 2) * getFreeFs->csize) / 2 / 1000000;
-	free_sectors = (free_clusters * getFreeFs->csize) / 2 / 1000000;
-
-	printf("SD card stats:\r\n%10lu GB total drive space.\r\n%10lu GB available.\r\n", total_sectors, free_sectors);
-
-	//Now let's try and write a file "write.txt"
-	fres = f_open(&fil, "frame.txt", FA_WRITE | FA_OPEN_ALWAYS | FA_CREATE_ALWAYS);
-	if(fres == FR_OK) {
-		printf("I was able to open 'frame.txt' for writing\r\n");
-	} else {
-		printf("f_open error (%i)\r\n", fres);
-	}
-
-	UINT bytesWrote;
-	fres = f_write(&fil, frame_buffer, FRAME_BUFFER_SIZE, &bytesWrote);
-	if(fres == FR_OK) {
-		printf("Wrote %i bytes to 'frame.txt'!\r\n", bytesWrote);
-	} else {
-		printf("f_write error (%i)\r\n", fres);
-	}
-
-	//Be a tidy kiwi - don't forget to close your file!
-	fres = f_close(&fil);
-	if(fres == FR_OK) {
-		printf("I was able to close 'frame.txt'\r\n");
-	} else {
-		printf("f_close error (%i)\r\n", fres);
-	}
-
-	//We're done, so de-mount the drive
-	fres = f_mount(NULL, "", 0);
-	if (fres != FR_OK) {
-		printf("f_mount error in un-mounting (%i)\r\n", fres);
-		while(1);
-	} else {
-		printf("Unmounted successfully  (%i)\r\n", fres);
-	}
+static void output_to_SD(void)
+	{
+	  FATFS FatFs;
+	  FIL Fil;
+	  FRESULT FR_Status;
+	  FATFS *FS_Ptr;
+	  UINT RWC, WWC; // Read/Write Word Counter
+	  DWORD FreeClusters;
+	  uint32_t TotalSize, FreeSpace;
+	  char RW_Buffer[200];
+	  do
+	  {
+	    //------------------[ Mount The SD Card ]--------------------
+	    FR_Status = f_mount(&FatFs, SDPath, 1);
+	    if (FR_Status != FR_OK)
+	    {
+	      sprintf(TxBuffer, "Error! While Mounting SD Card, Error Code: (%i)\r\n", FR_Status);
+	      printf(TxBuffer);
+	      break;
+	    }
+	    sprintf(TxBuffer, "SD Card Mounted Successfully! \r\n\n");
+	    printf(TxBuffer);
+	    //------------------[ Get & Print The SD Card Size & Free Space ]--------------------
+	    f_getfree("", &FreeClusters, &FS_Ptr);
+	    TotalSize = (uint32_t)((FS_Ptr->n_fatent - 2) * FS_Ptr->csize * 0.5);
+	    FreeSpace = (uint32_t)(FreeClusters * FS_Ptr->csize * 0.5);
+	    sprintf(TxBuffer, "Total SD Card Size: %lu Bytes\r\n", TotalSize);
+	    printf(TxBuffer);
+	    sprintf(TxBuffer, "Free SD Card Space: %lu Bytes\r\n\n", FreeSpace);
+	    printf(TxBuffer);
+	    //------------------[ Open A Text File For Write & Write Data ]--------------------
+	    //Open the file
+	    FR_Status = f_open(&Fil, "MyTextFile.txt", FA_WRITE | FA_READ | FA_CREATE_ALWAYS);
+	    if(FR_Status != FR_OK)
+	    {
+	      sprintf(TxBuffer, "Error! While Creating/Opening A New Text File, Error Code: (%i)\r\n", FR_Status);
+	      printf(TxBuffer);
+	      break;
+	    }
+	    sprintf(TxBuffer, "Text File Created & Opened! Writing Data To The Text File..\r\n\n");
+	    printf(TxBuffer);
+	    // (1) Write Data To The Text File [ Using f_puts() Function ]
+	    f_puts("Hello! From STM32 To SD Card Over SDMMC, Using f_puts()\n", &Fil);
+	    // (2) Write Data To The Text File [ Using f_write() Function ]
+	    strcpy(RW_Buffer, "Hello! From STM32 To SD Card Over SDMMC, Using f_write()\r\n");
+	    f_write(&Fil, RW_Buffer, strlen(RW_Buffer), &WWC);
+	    // Close The File
+	    f_close(&Fil);
+	    //------------------[ Open A Text File For Read & Read Its Data ]--------------------
+	    // Open The File
+	    FR_Status = f_open(&Fil, "MyTextFile.txt", FA_READ);
+	    if(FR_Status != FR_OK)
+	    {
+	      sprintf(TxBuffer, "Error! While Opening (MyTextFile.txt) File For Read.. \r\n");
+	      printf(TxBuffer);
+	      break;
+	    }
+	    // (1) Read The Text File's Data [ Using f_gets() Function ]
+	    f_gets(RW_Buffer, sizeof(RW_Buffer), &Fil);
+	    sprintf(TxBuffer, "Data Read From (MyTextFile.txt) Using f_gets():%s", RW_Buffer);
+	    printf(TxBuffer);
+	    // (2) Read The Text File's Data [ Using f_read() Function ]
+	    f_read(&Fil, RW_Buffer, f_size(&Fil), &RWC);
+	    sprintf(TxBuffer, "Data Read From (MyTextFile.txt) Using f_read():%s", RW_Buffer);
+	    printf(TxBuffer);
+	    // Close The File
+	    f_close(&Fil);
+	    sprintf(TxBuffer, "File Closed! \r\n\n");
+	    printf(TxBuffer);
+	    //------------------[ Open An Existing Text File, Update Its Content, Read It Back ]--------------------
+	    // (1) Open The Existing File For Write (Update)
+	    FR_Status = f_open(&Fil, "MyTextFile.txt", FA_OPEN_EXISTING | FA_WRITE);
+	    FR_Status = f_lseek(&Fil, f_size(&Fil)); // Move The File Pointer To The EOF (End-Of-File)
+	    if(FR_Status != FR_OK)
+	    {
+	      sprintf(TxBuffer, "Error! While Opening (MyTextFile.txt) File For Update.. \r\n");
+	      printf(TxBuffer);
+	      break;
+	    }
+	    // (2) Write New Line of Text Data To The File
+	    FR_Status = f_puts("This New Line Was Added During File Update!\r\n", &Fil);
+	    f_close(&Fil);
+	    memset(RW_Buffer,'\0',sizeof(RW_Buffer)); // Clear The Buffer
+	    // (3) Read The Contents of The Text File After The Update
+	    FR_Status = f_open(&Fil, "MyTextFile.txt", FA_READ); // Open The File For Read
+	    f_read(&Fil, RW_Buffer, f_size(&Fil), &RWC);
+	    sprintf(TxBuffer, "Data Read From (MyTextFile.txt) After Update:\r\n%s", RW_Buffer);
+	    printf(TxBuffer);
+	    f_close(&Fil);
+	    //------------------[ Delete The Text File ]--------------------
+	    // Delete The File
+	    /*
+	    FR_Status = f_unlink(MyTextFile.txt);
+	    if (FR_Status != FR_OK){
+	        sprintf(TxBuffer, "Error! While Deleting The (MyTextFile.txt) File.. \r\n");
+	        USC_CDC_Print(TxBuffer);
+	    }
+	    */
+	  } while(0);
+	  //------------------[ Test Complete! Unmount The SD Card ]--------------------
+	  FR_Status = f_mount(NULL, "", 0);
+	  if (FR_Status != FR_OK)
+	  {
+	      sprintf(TxBuffer, "\r\nError! While Un-mounting SD Card, Error Code: (%i)\r\n", FR_Status);
+	      printf(TxBuffer);
+	  } else{
+	      sprintf(TxBuffer, "\r\nSD Card Un-mounted Successfully! \r\n");
+	      printf(TxBuffer);
+	  }
 }
 
 //void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
