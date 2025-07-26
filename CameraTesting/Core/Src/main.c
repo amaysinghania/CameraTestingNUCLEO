@@ -114,74 +114,74 @@ static void debug_sd_card(void);
   * @param  None
   * @retval None
   */
-void InitOV5640(void)
-{
-  Camera_PowerUp();
-  Camera_Reset();
-	Camera_PowerUp();
-
-  printf("=== OV5640 BSP Driver Test ===\r\n");
-
-  // Initialize I/O structure
-  Camera_IO_Init();
-
-  // Register bus I/O
-  printf("Registering BSP I/O...\r\n");
-  ret = OV5640_RegisterBusIO(&cam, &io);
-  if (ret == OV5640_OK) {
-    printf("✓ BSP I/O registration successful\r\n");
-  } else {
-    printf("✗ BSP I/O registration failed (ret=%ld)\r\n", ret);
-    return;
-  }
-
-  // Test ReadID function
-  printf("Testing OV5640_ReadID()...\r\n");
-  ret = OV5640_ReadID(&cam, &camera_id);
-  if (ret == OV5640_OK) {
-    printf("✓ OV5640_ReadID successful: ID=0x%04lX\r\n", camera_id);
-    if (camera_id == 0x5640) {
-      printf("✓ Correct OV5640 chip detected\r\n");
-      BSP_LED_On(LED_BLUE);
-    } else {
-      printf("⚠ Unexpected chip ID (expected 0x5640)\r\n");
-    }
-  } else {
-    printf("✗ OV5640_ReadID failed (ret=%ld)\r\n", ret);
-  }
-
-  // Test camera capabilities
-  OV5640_Capabilities_t caps;
-  printf("Testing OV5640_GetCapabilities()...\r\n");
-  ret = OV5640_GetCapabilities(&cam, &caps);
-  if (ret == OV5640_OK) {
-    printf("✓ Camera capabilities read successfully\r\n");
-    printf("  Resolution config: %ld\r\n", caps.Config_Resolution);
-    printf("  Brightness config: %ld\r\n", caps.Config_Brightness);
-    printf("  Contrast config: %ld\r\n", caps.Config_Contrast);
-  } else {
-    printf("✗ Failed to read camera capabilities (ret=%ld)\r\n", ret);
-  }
-
-  // Test camera initialization
-  printf("Testing OV5640_Init()...\r\n");
-  ret = OV5640_Init(&cam, OV5640_R640x480, OV5640_RGB565);
-  if (ret == OV5640_OK) {
-  	ret = OV5640_SetPCLK(&cam, OV5640_PCLK_24M);
-  	if (ret == OV5640_OK) {
-			printf("✓ OV5640_Init successful (VGA, RGB565)\r\n");
-			printf("✓ Camera is ready for image capture!\r\n");
-			BSP_LED_On(LED_GREEN);
-  	} else {
-      printf("✗ OV5640_SetPCLK failed (ret=%ld)\r\n", ret);
-    }
-  }
-  else {
-    printf("✗ OV5640_Init failed (ret=%ld)\r\n", ret);
-  }
-
-  printf("=============================\r\n\r\n");
-}
+//void InitOV5640(void)
+//{
+//  Camera_PowerUp();
+//  Camera_Reset();
+//	Camera_PowerUp();
+//
+//  printf("=== OV5640 BSP Driver Test ===\r\n");
+//
+//  // Initialize I/O structure
+//  Camera_IO_Init();
+//
+//  // Register bus I/O
+//  printf("Registering BSP I/O...\r\n");
+//  ret = OV5640_RegisterBusIO(&cam, &io);
+//  if (ret == OV5640_OK) {
+//    printf("✓ BSP I/O registration successful\r\n");
+//  } else {
+//    printf("✗ BSP I/O registration failed (ret=%ld)\r\n", ret);
+//    return;
+//  }
+//
+//  // Test ReadID function
+//  printf("Testing OV5640_ReadID()...\r\n");
+//  ret = OV5640_ReadID(&cam, &camera_id);
+//  if (ret == OV5640_OK) {
+//    printf("✓ OV5640_ReadID successful: ID=0x%04lX\r\n", camera_id);
+//    if (camera_id == 0x5640) {
+//      printf("✓ Correct OV5640 chip detected\r\n");
+//      BSP_LED_On(LED_BLUE);
+//    } else {
+//      printf("⚠ Unexpected chip ID (expected 0x5640)\r\n");
+//    }
+//  } else {
+//    printf("✗ OV5640_ReadID failed (ret=%ld)\r\n", ret);
+//  }
+//
+//  // Test camera capabilities
+//  OV5640_Capabilities_t caps;
+//  printf("Testing OV5640_GetCapabilities()...\r\n");
+//  ret = OV5640_GetCapabilities(&cam, &caps);
+//  if (ret == OV5640_OK) {
+//    printf("✓ Camera capabilities read successfully\r\n");
+//    printf("  Resolution config: %ld\r\n", caps.Config_Resolution);
+//    printf("  Brightness config: %ld\r\n", caps.Config_Brightness);
+//    printf("  Contrast config: %ld\r\n", caps.Config_Contrast);
+//  } else {
+//    printf("✗ Failed to read camera capabilities (ret=%ld)\r\n", ret);
+//  }
+//
+//  // Test camera initialization
+//  printf("Testing OV5640_Init()...\r\n");
+//  ret = OV5640_Init(&cam, OV5640_R640x480, OV5640_RGB565);
+//  if (ret == OV5640_OK) {
+//  	ret = OV5640_SetPCLK(&cam, OV5640_PCLK_24M);
+//  	if (ret == OV5640_OK) {
+//			printf("✓ OV5640_Init successful (VGA, RGB565)\r\n");
+//			printf("✓ Camera is ready for image capture!\r\n");
+//			BSP_LED_On(LED_GREEN);
+//  	} else {
+//      printf("✗ OV5640_SetPCLK failed (ret=%ld)\r\n", ret);
+//    }
+//  }
+//  else {
+//    printf("✗ OV5640_Init failed (ret=%ld)\r\n", ret);
+//  }
+//
+//  printf("=============================\r\n\r\n");
+//}
 /* USER CODE END 0 */
 
 /**
@@ -247,13 +247,13 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  InitOV5640();
-  OV5640_Start(&cam);
-  printf("Taking Photo\r\n");
-  capture_image();
-
-  // Run SD card debug test first
-  debug_sd_card();
+//  InitOV5640();
+//  OV5640_Start(&cam);
+//  printf("Taking Photo\r\n");
+//  capture_image();
+//
+//  // Run SD card debug test first
+//  debug_sd_card();
 
   output_to_SD();
 
@@ -620,34 +620,34 @@ static void MX_GPIO_Init(void)
   * @brief  Captures a frame from the camera using DCMI and DMA.
   * @retval None
   */
-static void capture_image(void)
-{
-  camImgReady = False;
-
-  printf("Starting image capture...\r\n");
-
-  if (HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buffer, FRAME_BUFFER_SIZE / 4) != HAL_OK)
-  {
-    printf("✗ Failed to start DCMI DMA\r\n");
-    Error_Handler();
-  }
-
-  // Wait for frame ready
-  while (camImgReady == False)
-  {
-    HAL_Delay(1);
-  }
-
-  printf("✓ Frame captured into RAM\r\n");
-
-  // Optional: Print a small portion of the data
-
-
-//  for (int i = 0; i < 32; i++) {
-//    printf("%02X ", frame_buffer[i]);
+//static void capture_image(void)
+//{
+//  camImgReady = False;
+//
+//  printf("Starting image capture...\r\n");
+//
+//  if (HAL_DCMI_Start_DMA(&hdcmi, DCMI_MODE_SNAPSHOT, (uint32_t)frame_buffer, FRAME_BUFFER_SIZE / 4) != HAL_OK)
+//  {
+//    printf("✗ Failed to start DCMI DMA\r\n");
+//    Error_Handler();
 //  }
-
-}
+//
+//  // Wait for frame ready
+//  while (camImgReady == False)
+//  {
+//    HAL_Delay(1);
+//  }
+//
+//  printf("✓ Frame captured into RAM\r\n");
+//
+//  // Optional: Print a small portion of the data
+//
+//
+////  for (int i = 0; i < 32; i++) {
+////    printf("%02X ", frame_buffer[i]);
+////  }
+//
+//}
 
 /**
   * @brief  Comprehensive SD card debug function to test all aspects of SD functionality
@@ -936,52 +936,52 @@ static void output_to_SD(void){
 	}
 }
 
-void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
-{
-	printf("HAL_DCMI_FrameEventCallback fired!\r\n");
-	camImgReady = True;
-	HAL_DCMI_Stop(hdcmi);
-}
+//void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
+//{
+//	printf("HAL_DCMI_FrameEventCallback fired!\r\n");
+//	camImgReady = True;
+//	HAL_DCMI_Stop(hdcmi);
+//}
 
 /**
   * @brief  Initialize Camera I/O structure
   * @param  None
   * @retval None
   */
-static void Camera_IO_Init(void)
-{
-  // Configure the camera I/O structure with function pointers
-  io.Init       = OV5640_IO_Init;
-  io.DeInit     = OV5640_IO_DeInit;
-  io.Address    = OV5640_I2C_ADDRESS;
-  io.WriteReg   = OV5640_IO_WriteReg;
-  io.ReadReg    = OV5640_IO_ReadReg;
-  io.GetTick    = OV5640_IO_GetTick;
-  camImgReady = 0;
-}
+//static void Camera_IO_Init(void)
+//{
+//  // Configure the camera I/O structure with function pointers
+//  io.Init       = OV5640_IO_Init;
+//  io.DeInit     = OV5640_IO_DeInit;
+//  io.Address    = OV5640_I2C_ADDRESS;
+//  io.WriteReg   = OV5640_IO_WriteReg;
+//  io.ReadReg    = OV5640_IO_ReadReg;
+//  io.GetTick    = OV5640_IO_GetTick;
+//  camImgReady = 0;
+//}
 
 /**
   * @brief  Initialize Camera I2C communication
   * @param  None
   * @retval 0 if OK, -1 if error
   */
-static int32_t OV5640_IO_Init(void)
-{
-  // I2C is already initialized in MX_I2C1_Init()
-  // Could add additional initialization here if needed
-  return 0;
-}
+//static int32_t OV5640_IO_Init(void)
+//{
+//  // I2C is already initialized in MX_I2C1_Init()
+//  // Could add additional initialization here if needed
+//  return 0;
+//}
 
 /**
   * @brief  Deinitialize Camera I2C communication
   * @param  None
   * @retval 0 if OK, -1 if error
   */
-static int32_t OV5640_IO_DeInit(void)
-{
-  // Could add deinitialization code here if needed
-  return 0;
-}
+//static int32_t OV5640_IO_DeInit(void)
+//{
+//  // Could add deinitialization code here if needed
+//  return 0;
+//}
 
 /**
   * @brief  Write camera register via I2C
@@ -991,18 +991,18 @@ static int32_t OV5640_IO_DeInit(void)
   * @param  Length: Data length
   * @retval 0 if OK, -1 if error
   */
-static int32_t OV5640_IO_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16_t Length)
-{
-  HAL_StatusTypeDef status;
-
-  // Use the DevAddr parameter, shifted left by 1 for HAL I2C functions
-  status = HAL_I2C_Mem_Write(&hi2c1, (DevAddr << 1), Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
-  if (status != HAL_OK) {
-    return OV5640_ERROR;
-  }
-
-  return OV5640_OK;
-}
+//static int32_t OV5640_IO_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16_t Length)
+//{
+//  HAL_StatusTypeDef status;
+//
+//  // Use the DevAddr parameter, shifted left by 1 for HAL I2C functions
+//  status = HAL_I2C_Mem_Write(&hi2c1, (DevAddr << 1), Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
+//  if (status != HAL_OK) {
+//    return OV5640_ERROR;
+//  }
+//
+//  return OV5640_OK;
+//}
 
 /**
   * @brief  Read camera register via I2C
@@ -1012,59 +1012,59 @@ static int32_t OV5640_IO_WriteReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData
   * @param  Length: Data length
   * @retval 0 if OK, -1 if error
   */
-static int32_t OV5640_IO_ReadReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16_t Length)
-{
-  HAL_StatusTypeDef status;
-
-  // Use the DevAddr parameter, shifted left by 1 for HAL I2C functions
-  status = HAL_I2C_Mem_Read(&hi2c1, (DevAddr << 1), Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
-  if (status != HAL_OK) {
-    return OV5640_ERROR;
-  }
-
-  return OV5640_OK;
-}
+//static int32_t OV5640_IO_ReadReg(uint16_t DevAddr, uint16_t Reg, uint8_t *pData, uint16_t Length)
+//{
+//  HAL_StatusTypeDef status;
+//
+//  // Use the DevAddr parameter, shifted left by 1 for HAL I2C functions
+//  status = HAL_I2C_Mem_Read(&hi2c1, (DevAddr << 1), Reg, I2C_MEMADD_SIZE_16BIT, pData, Length, HAL_MAX_DELAY);
+//  if (status != HAL_OK) {
+//    return OV5640_ERROR;
+//  }
+//
+//  return OV5640_OK;
+//}
 
 /**
   * @brief  Get system tick for timing operations
   * @param  None
   * @retval Current tick value
   */
-static int32_t OV5640_IO_GetTick(void)
-{
-  return HAL_GetTick();
-}
+//static int32_t OV5640_IO_GetTick(void)
+//{
+//  return HAL_GetTick();
+//}
 
 /**
   * @brief  Reset the camera module
   * @param  None
   * @retval None
   */
-static void Camera_Reset(void)
-{
-  // Pull reset pin low for at least 1ms, then high
-	printf("Resetting up camera...\r\n");
-  HAL_GPIO_WritePin(Reset_GPIO_Port, Reset_Pin, GPIO_PIN_RESET);
-  HAL_Delay(2);  // Hold reset for 2ms
-  HAL_GPIO_WritePin(Reset_GPIO_Port, Reset_Pin, GPIO_PIN_SET);
-  HAL_Delay(60); // Allow camera to boot up
-  printf("=============================\r\n\r\n");
-}
+//static void Camera_Reset(void)
+//{
+//  // Pull reset pin low for at least 1ms, then high
+//	printf("Resetting up camera...\r\n");
+//  HAL_GPIO_WritePin(Reset_GPIO_Port, Reset_Pin, GPIO_PIN_RESET);
+//  HAL_Delay(2);  // Hold reset for 2ms
+//  HAL_GPIO_WritePin(Reset_GPIO_Port, Reset_Pin, GPIO_PIN_SET);
+//  HAL_Delay(60); // Allow camera to boot up
+//  printf("=============================\r\n\r\n");
+//}
 
 /**
   * @brief  Power up the camera module
   * @param  None
   * @retval None
   */
-static void Camera_PowerUp(void)
-{
-  // Set power down pin low to power up the camera
-	printf("Powering up camera...\r\n");
-  HAL_GPIO_WritePin(Shutdown_GPIO_Port, Shutdown_Pin, GPIO_PIN_RESET);
-  HAL_Delay(60); // Allow camera to boot up
-  printf("=============================\r\n\r\n");
-
-}
+//static void Camera_PowerUp(void)
+//{
+//  // Set power down pin low to power up the camera
+//	printf("Powering up camera...\r\n");
+//  HAL_GPIO_WritePin(Shutdown_GPIO_Port, Shutdown_Pin, GPIO_PIN_RESET);
+//  HAL_Delay(60); // Allow camera to boot up
+//  printf("=============================\r\n\r\n");
+//
+//}
 /* USER CODE END 4 */
 
 /**
