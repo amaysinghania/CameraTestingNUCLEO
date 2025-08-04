@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "fatfs.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -61,6 +62,8 @@ DMA_HandleTypeDef hdma_dcmi;
 
 I2C_HandleTypeDef hi2c1;
 
+SD_HandleTypeDef hsd1;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -71,6 +74,8 @@ uint32_t camera_id;
 
 uint8_t frame_buffer[FRAME_BUFFER_SIZE] __attribute__((section(".sram1")));
 volatile uint8_t camImgReady = 0;
+
+char TxBuffer[250];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -80,6 +85,7 @@ static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_DCMI_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_SDMMC1_SD_Init(void);
 /* USER CODE BEGIN PFP */
 // Camera I2C communication functions
 static int32_t OV5640_IO_Init(void);
@@ -91,6 +97,7 @@ static void Camera_IO_Init(void);
 static void Camera_Reset(void);
 static void Camera_PowerUp(void);
 static void capture_image(void);
+static void testSDCard(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -204,6 +211,8 @@ int main(void)
   MX_I2C1_Init();
   MX_DCMI_Init();
   MX_USART2_UART_Init();
+  MX_SDMMC1_SD_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -233,6 +242,8 @@ int main(void)
   OV5640_Start(&cam);
   printf("Taking Photo\r\n");
   capture_image();
+
+  testSDCard();
 
   while (1)
   {
@@ -387,6 +398,33 @@ static void MX_I2C1_Init(void)
   /* USER CODE BEGIN I2C1_Init 2 */
 
   /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
+  * @brief SDMMC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SDMMC1_SD_Init(void)
+{
+
+  /* USER CODE BEGIN SDMMC1_Init 0 */
+
+  /* USER CODE END SDMMC1_Init 0 */
+
+  /* USER CODE BEGIN SDMMC1_Init 1 */
+
+  /* USER CODE END SDMMC1_Init 1 */
+  hsd1.Instance = SDMMC1;
+  hsd1.Init.ClockEdge = SDMMC_CLOCK_EDGE_RISING;
+  hsd1.Init.ClockPowerSave = SDMMC_CLOCK_POWER_SAVE_DISABLE;
+  hsd1.Init.BusWide = SDMMC_BUS_WIDE_4B;
+  hsd1.Init.HardwareFlowControl = SDMMC_HARDWARE_FLOW_CONTROL_DISABLE;
+  hsd1.Init.ClockDiv = 10;
+  /* USER CODE BEGIN SDMMC1_Init 2 */
+
+  /* USER CODE END SDMMC1_Init 2 */
 
 }
 
@@ -548,6 +586,117 @@ static void capture_image(void)
     printf("%02X ", frame_buffer[i]);
   }
   */
+}
+
+static void testSDCard(void)
+{
+	FATFS FatFs;
+	  FIL Fil;
+	  FRESULT FR_Status;
+	  FATFS *FS_Ptr;
+	  UINT RWC, WWC; // Read/Write Word Counter
+	  DWORD FreeClusters;
+	  uint32_t TotalSize, FreeSpace;
+	  char RW_Buffer[200];
+	  do
+	  {
+	    //------------------[ Mount The SD Card ]--------------------
+	    FR_Status = f_mount(&FatFs, SDPath, 1);
+	    if (FR_Status != FR_OK)
+	    {
+	      sprintf(TxBuffer, "Error! While Mounting SD Card, Error Code: (%i)\r\n", FR_Status);
+	      printf(TxBuffer);
+	      break;
+	    }
+	    sprintf(TxBuffer, "SD Card Mounted Successfully! \r\n\n");
+	    printf(TxBuffer);
+	    //------------------[ Get & Print The SD Card Size & Free Space ]--------------------
+	    f_getfree("", &FreeClusters, &FS_Ptr);
+	    TotalSize = (uint32_t)((FS_Ptr->n_fatent - 2) * FS_Ptr->csize * 0.5);
+	    FreeSpace = (uint32_t)(FreeClusters * FS_Ptr->csize * 0.5);
+	    sprintf(TxBuffer, "Total SD Card Size: %lu Bytes\r\n", TotalSize);
+	    printf(TxBuffer);
+	    sprintf(TxBuffer, "Free SD Card Space: %lu Bytes\r\n\n", FreeSpace);
+	    printf(TxBuffer);
+	    //------------------[ Open A Text File For Write & Write Data ]--------------------
+	    //Open the file
+	    FR_Status = f_open(&Fil, "MyTextFile.txt", FA_WRITE | FA_READ | FA_CREATE_ALWAYS);
+	    if(FR_Status != FR_OK)
+	    {
+	      sprintf(TxBuffer, "Error! While Creating/Opening A New Text File, Error Code: (%i)\r\n", FR_Status);
+	      printf(TxBuffer);
+	      break;
+	    }
+	    sprintf(TxBuffer, "Text File Created & Opened! Writing Data To The Text File..\r\n\n");
+	    printf(TxBuffer);
+	    // (1) Write Data To The Text File [ Using f_puts() Function ]
+	    f_puts("Hello! From STM32 To SD Card Over SDMMC, Using f_puts()\n", &Fil);
+	    // (2) Write Data To The Text File [ Using f_write() Function ]
+	    strcpy(RW_Buffer, "Hello! From STM32 To SD Card Over SDMMC, Using f_write()\r\n");
+	    f_write(&Fil, RW_Buffer, strlen(RW_Buffer), &WWC);
+	    // Close The File
+	    f_close(&Fil);
+	    //------------------[ Open A Text File For Read & Read Its Data ]--------------------
+	    // Open The File
+	    FR_Status = f_open(&Fil, "MyTextFile.txt", FA_READ);
+	    if(FR_Status != FR_OK)
+	    {
+	      sprintf(TxBuffer, "Error! While Opening (MyTextFile.txt) File For Read.. \r\n");
+	      printf(TxBuffer);
+	      break;
+	    }
+	    // (1) Read The Text File's Data [ Using f_gets() Function ]
+	    f_gets(RW_Buffer, sizeof(RW_Buffer), &Fil);
+	    sprintf(TxBuffer, "Data Read From (MyTextFile.txt) Using f_gets():%s", RW_Buffer);
+	    printf(TxBuffer);
+	    // (2) Read The Text File's Data [ Using f_read() Function ]
+	    f_read(&Fil, RW_Buffer, f_size(&Fil), &RWC);
+	    sprintf(TxBuffer, "Data Read From (MyTextFile.txt) Using f_read():%s", RW_Buffer);
+	    printf(TxBuffer);
+	    // Close The File
+	    f_close(&Fil);
+	    sprintf(TxBuffer, "File Closed! \r\n\n");
+	    printf(TxBuffer);
+	    //------------------[ Open An Existing Text File, Update Its Content, Read It Back ]--------------------
+	    // (1) Open The Existing File For Write (Update)
+	    FR_Status = f_open(&Fil, "MyTextFile.txt", FA_OPEN_EXISTING | FA_WRITE);
+	    FR_Status = f_lseek(&Fil, f_size(&Fil)); // Move The File Pointer To The EOF (End-Of-File)
+	    if(FR_Status != FR_OK)
+	    {
+	      sprintf(TxBuffer, "Error! While Opening (MyTextFile.txt) File For Update.. \r\n");
+	      printf(TxBuffer);
+	      break;
+	    }
+	    // (2) Write New Line of Text Data To The File
+	    FR_Status = f_puts("This New Line Was Added During File Update!\r\n", &Fil);
+	    f_close(&Fil);
+	    memset(RW_Buffer,'\0',sizeof(RW_Buffer)); // Clear The Buffer
+	    // (3) Read The Contents of The Text File After The Update
+	    FR_Status = f_open(&Fil, "MyTextFile.txt", FA_READ); // Open The File For Read
+	    f_read(&Fil, RW_Buffer, f_size(&Fil), &RWC);
+	    sprintf(TxBuffer, "Data Read From (MyTextFile.txt) After Update:\r\n%s", RW_Buffer);
+	    printf(TxBuffer);
+	    f_close(&Fil);
+	    //------------------[ Delete The Text File ]--------------------
+	    // Delete The File
+	    /*
+	    FR_Status = f_unlink(MyTextFile.txt);
+	    if (FR_Status != FR_OK){
+	        sprintf(TxBuffer, "Error! While Deleting The (MyTextFile.txt) File.. \r\n");
+	        USC_CDC_Print(TxBuffer);
+	    }
+	    */
+	  } while(0);
+	  //------------------[ Test Complete! Unmount The SD Card ]--------------------
+	  FR_Status = f_mount(NULL, "", 0);
+	  if (FR_Status != FR_OK)
+	  {
+	      sprintf(TxBuffer, "\r\nError! While Un-mounting SD Card, Error Code: (%i)\r\n", FR_Status);
+	      printf(TxBuffer);
+	  } else{
+	      sprintf(TxBuffer, "\r\nSD Card Un-mounted Successfully! \r\n");
+	      printf(TxBuffer);
+	  }
 }
 
 void HAL_DCMI_FrameEventCallback(DCMI_HandleTypeDef *hdcmi)
